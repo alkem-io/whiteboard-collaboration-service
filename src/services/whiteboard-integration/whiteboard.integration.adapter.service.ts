@@ -52,7 +52,7 @@ export class WhiteboardIntegrationAdapterService {
     return this.sendWithResponse<InfoOutputData, InfoInputData>(
       WhiteboardIntegrationMessagePattern.INFO,
       data,
-    ).catch((e) => {
+    ).catch(() => {
       return {
         read: false,
         update: false,
@@ -102,11 +102,15 @@ export class WhiteboardIntegrationAdapterService {
       .pipe(timeout({ first: timeoutMs }));
 
     return firstValueFrom(result$).catch((err) => {
-      this.logger.error(err?.message ?? err, err?.stack, JSON.stringify({
-        pattern,
-        data,
-        timeout: timeoutMs,
-      }));
+      this.logger.error(
+        err?.message ?? err,
+        err?.stack,
+        JSON.stringify({
+          pattern,
+          data,
+          timeout: timeoutMs,
+        }),
+      );
 
       throw new Error('Error while processing integration request.');
     });

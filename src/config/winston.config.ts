@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import * as winston from 'winston';
 import { utilities as nestWinstonModuleUtilities } from 'nest-winston';
-import { FileTransportOptions } from 'winston/lib/winston/transports';
 import * as logform from 'logform';
 
 const LOG_LABEL = 'alkemio-server';

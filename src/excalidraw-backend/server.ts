@@ -259,6 +259,7 @@ export class Server {
     const ac = new AbortController();
     // todo maybe throws
     (async () => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       for await (const _ of setInterval(this.contributionWindowMs, null, {
         signal: ac.signal,
       })) {
@@ -306,6 +307,7 @@ export class Server {
   private startAutoSaveTrackerForRoom(roomId: string) {
     const ac = new AbortController();
     (async () => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       for await (const _ of setInterval(this.saveIntervalMs, null, {
         signal: ac.signal,
       })) {

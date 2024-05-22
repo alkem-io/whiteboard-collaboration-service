@@ -1,4 +1,5 @@
 // import http from 'http';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
 const http = require('http'); // todo why is that?
 import { Namespace, Server as SocketIO } from 'socket.io';
 import { Adapter } from 'socket.io-adapter';

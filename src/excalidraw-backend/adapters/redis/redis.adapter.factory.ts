@@ -8,9 +8,11 @@ export const redisAdapterFactory = (() => {
 
   const pubClient = createClient({ url: `redis://${redisHost}:${redisPort}` });
   const subClient = pubClient.duplicate();
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   pubClient.on('error', (error: Error) => {
     // todo logging
   });
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   subClient.on('error', (error: Error) => {
     // todo logging
   });

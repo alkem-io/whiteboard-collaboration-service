@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { WhiteboardIntegrationService } from '../whiteboard-integration/whiteboard.integration.service';
 import { UserInfo } from '../whiteboard-integration/user.info';
-import { AuthorizationPrivilege } from '../whiteboard-integration/authorization.privilege';
 import {
   ContentModifiedInputData,
   ContributionInputData,

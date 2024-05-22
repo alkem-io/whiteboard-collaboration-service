@@ -1,6 +1,7 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 // import YAML from 'yaml';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
 const YAML = require('yaml'); // todo: WHY??
 
 const YAML_CONFIG_FILENAME = 'config.yml';
