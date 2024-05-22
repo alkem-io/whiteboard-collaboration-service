@@ -1,6 +1,6 @@
 language: node_js
 node_js:
-  - v20.13.1
+  - v20.12.1
 env:
   matrix:
     - NODE_OPTIONS="--max-old-space-size=4196"
@@ -10,6 +10,6 @@ cache:
 install:
   - npm install
 before_install:
-  - npm i -g npm@10.5.2
+  - npm i -g npm@10.5.0
 script:
   - npm run test:ci
