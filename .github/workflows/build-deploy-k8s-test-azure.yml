@@ -53,7 +53,7 @@ jobs:
       - uses: Azure/k8s-deploy@v4.10
         with:
           manifests: |
-            manifests/25-whiteboarad-collaboration-service-deployment-dev.yaml
+            manifests/25-whiteboard-collaboration-service-deployment-dev.yaml
           images: |
             ${{ secrets.REGISTRY_LOGIN_SERVER }}/alkemio-whiteboard-collaboration-service:${{ github.sha }}
           imagepullsecrets: |
