@@ -1,5 +1,5 @@
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
-import { setTimeout } from 'node:timers/promises';
+import { setTimeout, setInterval } from 'node:timers/promises';
 import {
   Inject,
   Injectable,
@@ -51,20 +51,19 @@ import {
 } from './utils';
 import { CREATE_ROOM, DELETE_ROOM } from './adapters/adapter.event.names';
 import { APP_ID } from '../app.id';
-import { setInterval } from 'timers';
-import { arrayRandomElement } from '../util';
+import { arrayRandomElement, isAbortError } from '../util';
 
 type SaveMessageOpts = { timeout: number };
-type RoomTimers = Map<string, AbortController>;
-type SocketTimers = Map<string, AbortController>;
+type RoomTrackers = Map<string, AbortController>;
+type SocketTrackers = Map<string, AbortController>;
 
 @Injectable()
 export class Server {
   private readonly wsServer: SocketIoServer;
 
-  private readonly contributionTimers: RoomTimers = new Map();
-  private readonly saveTimers: Map<string, NodeJS.Timeout> = new Map();
-  private readonly collaboratorModeTimers: SocketTimers = new Map();
+  private readonly contributionTrackers: RoomTrackers = new Map();
+  private readonly autoSaveTrackers: RoomTrackers = new Map();
+  private readonly collaboratorInactivityTrackers: SocketTrackers = new Map();
 
   private readonly contributionWindowMs: number;
   private readonly saveIntervalMs: number;
@@ -92,7 +91,7 @@ export class Server {
       save_timeout,
       collaborator_inactivity,
       max_collaborators_in_room,
-      } = this.configService.get('settings');
+    } = this.configService.get('settings');
     console.table(this.configService.get('settings'));
 
     this.contributionWindowMs =
@@ -127,21 +126,22 @@ export class Server {
       }
       this.logger.verbose?.(`Room '${roomId}' created on instance '${APP_ID}'`);
 
-      // todo
-      // const contributionTimer = this.contributionTimers.get(roomId);
-      // if (!contributionTimer) {
-      //   this.logger.verbose?.(
-      //     `Starting contribution timer for room '${roomId}'`,
-      //   );
-      //   const timer = this.startContributionEventTimer(roomId);
-      //   this.contributionTimers.set(roomId, timer);
-      // }
+      const contributionAC = this.contributionTrackers.get(roomId);
+      if (!contributionAC) {
+        this.logger.verbose?.(
+          `Starting contribution tracker for room '${roomId}'`,
+        );
+        const ac = this.startContributionTrackerForRoom(roomId);
+        this.contributionTrackers.set(roomId, ac);
+      }
 
-      const saveTimer = this.saveTimers.get(roomId);
-      if (!saveTimer) {
-        this.logger.verbose?.(`Starting auto save timer for room '${roomId}'`);
-        const timer = this.startSaveTimer(roomId);
-        this.saveTimers.set(roomId, timer);
+      const autosaveTracker = this.autoSaveTrackers.get(roomId);
+      if (!autosaveTracker) {
+        this.logger.verbose?.(
+          `Starting auto save tracker for room '${roomId}'`,
+        );
+        const ac = this.startAutoSaveTrackerForRoom(roomId);
+        this.autoSaveTrackers.set(roomId, ac);
       }
     });
     adapter.on(DELETE_ROOM, async (roomId: string) => {
@@ -167,8 +167,8 @@ export class Server {
       this.logger.verbose?.(
         `Room '${roomId}' deleted locally and everywhere else - this was the final instance`,
       );
-      // delete timers that were left locally
-      this.deleteTimersForRoom(roomId);
+      // delete trackers that were left locally
+      this.deleteTrackersForRoom(roomId);
     });
     adapter.on('error', (error: Error) => {
       this.logger.error(error, error.stack);
@@ -199,7 +199,7 @@ export class Server {
         if (err && err instanceof UnauthorizedException) {
           closeConnection(socket, err.message);
         }
-        this.deleteCollaboratorModeTimerForSocket(socket);
+        this.deleteCollaboratorInactivityTrackerForSocket(socket);
       });
 
       socket.on(JOIN_ROOM, async (roomID) => {
@@ -214,13 +214,13 @@ export class Server {
         );
 
         if (socket.data.update) {
-          this.startCollaboratorModeTimer(socket);
+          this.startCollaboratorInactivityTrackerForSocket(socket);
           // user can broadcast content change events
           socket.on(SERVER_BROADCAST, (roomID: string, data: ArrayBuffer) => {
             serverBroadcastEventHandler(roomID, data, socket, (roomId) =>
               this.utilService.contentModified(socket.data.userInfo.id, roomId),
             );
-            this.resetCollaboratorModeTimer(socket);
+            this.resetCollaboratorInactivityTrackerForSocket(socket);
           });
           socket.on(SCENE_INIT, (roomID: string, data: ArrayBuffer) => {
             socket.broadcast.to(roomID).emit(CLIENT_BROADCAST, data);
@@ -235,7 +235,7 @@ export class Server {
         SERVER_VOLATILE_BROADCAST,
         (roomID: string, data: ArrayBuffer) => {
           serverVolatileBroadcastEventHandler(roomID, data, socket);
-          this.resetCollaboratorModeTimer(socket);
+          this.resetCollaboratorInactivityTrackerForSocket(socket);
         },
       );
 
@@ -250,63 +250,92 @@ export class Server {
       );
       socket.on(DISCONNECT, () => {
         disconnectEventHandler(socket);
-        this.deleteCollaboratorModeTimerForSocket(socket);
+        this.deleteCollaboratorInactivityTrackerForSocket(socket);
       });
     });
   }
 
-  // private startContributionEventTimer(roomId: string) {
-  //   return setInterval(
-  //     async () => await this.gatherContributions(roomId),
-  //     this.contributionWindowMs,
-  //   );
-  // }
-
-  // private async gatherContributions(roomId: string) {
-  //   const windowEnd = Date.now();
-  //   const windowStart = windowEnd - this.contributionWindowMs;
-  //
-  //   const community =
-  //     await this.communityResolver.getCommunityFromWhiteboardOrFail(roomId);
-  //   const spaceID =
-  //     await this.communityResolver.getRootSpaceIDFromCommunityOrFail(community);
-  //   const wb = await this.whiteboardService.getProfile(roomId);
-  //
-  //   const sockets = await this.fetchSocketsSafe(roomId);
-  //
-  //   for (const socket of sockets) {
-  //     const lastContributed = socket.data.lastContributed;
-  //     // was the last contribution in that window
-  //     if (lastContributed >= windowStart && windowEnd >= lastContributed) {
-  //       this.contributionReporter.whiteboardContribution(
-  //         {
-  //           id: roomId,
-  //           name: wb.displayName,
-  //           space: spaceID,
-  //         },
-  //         {
-  //           id: socket.data.agentInfo.userID,
-  //           email: socket.data.agentInfo.email,
-  //         }
-  //       );
-  //     }
-  //   }
-  // }
-
-  private startSaveTimer(roomId: string) {
-    return setInterval(async () => {
-      const saved = await this.sendSaveMessage(roomId, {
-        timeout: this.saveTimeoutMs,
-      });
-
-      if (saved === undefined) {
-        this.logger.verbose?.(`No eligible sockets found to save '${roomId}'`);
-      } else if (saved) {
-        this.logger.verbose?.(`Saving '${roomId}' successful`);
-      } else {
-        this.logger.error(`Saving '${roomId}' failed`);
+  private startContributionTrackerForRoom(roomId: string) {
+    const ac = new AbortController();
+    // todo maybe throws
+    (async () => {
+      for await (const _ of setInterval(this.contributionWindowMs, null, {
+        signal: ac.signal,
+      })) {
+        await this.gatherContributions(roomId);
       }
-    }, this.saveIntervalMs);
+    })().catch((e) => {
+      if (isAbortError(e)) {
+        this.logger.verbose?.(
+          `Contribution tracker for room '${roomId}' was aborted with reason '${e.cause}'`,
+        );
+      } else {
+        this.logger.error?.(
+          `Contribution tracker for room '${roomId}' failed: ${e.message}`,
+        );
+      }
+    });
+
+    return ac;
+  }
+
+  private async gatherContributions(roomId: string) {
+    const windowEnd = Date.now();
+    const windowStart = windowEnd - this.contributionWindowMs;
+
+    const sockets = await this.fetchSocketsSafe(roomId);
+
+    const users = sockets
+      .map((socket) => {
+        const lastContributed = socket.data.lastContributed;
+        if (lastContributed >= windowStart && windowEnd >= lastContributed) {
+          return {
+            id: socket.data.userInfo.id,
+            email: socket.data.userInfo.email,
+          };
+        }
+      })
+      .filter((item): item is { id: string; email: string } => !!item);
+
+    this.logger.verbose?.(
+      `Registering contributions for ${users.length} users in room '${roomId}'`,
+    );
+    return this.utilService.contribution(roomId, users);
+  }
+
+  private startAutoSaveTrackerForRoom(roomId: string) {
+    const ac = new AbortController();
+    (async () => {
+      for await (const _ of setInterval(this.saveIntervalMs, null, {
+        signal: ac.signal,
+      })) {
+        const saved = await this.sendSaveMessage(roomId, {
+          timeout: this.saveTimeoutMs,
+        });
+
+        if (saved === undefined) {
+          this.logger.verbose?.(
+            `No eligible sockets found to save '${roomId}'`,
+          );
+        } else if (saved) {
+          this.logger.verbose?.(`Saving '${roomId}' successful`);
+        } else {
+          this.logger.error(`Saving '${roomId}' failed`);
+        }
+      }
+    })().catch((e) => {
+      if (isAbortError(e)) {
+        this.logger.verbose?.(
+          `Auto save tracker for room '${roomId}' was aborted with reason '${e.cause}'`,
+        );
+      } else {
+        this.logger.error?.(
+          `Auto save tracker for room '${roomId}' failed: ${e.message}`,
+        );
+      }
+    });
+
+    return ac;
   }
 
   /***
@@ -379,23 +408,25 @@ export class Server {
     });
   }
 
-  private deleteTimersForRoom(roomId: string) {
-    const contributionAC = this.contributionTimers.get(roomId);
+  private deleteTrackersForRoom(roomId: string) {
+    const contributionAC = this.contributionTrackers.get(roomId);
     if (contributionAC) {
       contributionAC.abort('deleted');
-      this.contributionTimers.delete(roomId);
-      this.logger.verbose?.(`Deleted contribution timer for room '${roomId}'`);
+      this.contributionTrackers.delete(roomId);
+      this.logger.verbose?.(
+        `Deleted contribution tracker for room '${roomId}'`,
+      );
     }
 
-    const saveTimer = this.saveTimers.get(roomId);
-    if (saveTimer) {
-      clearInterval(saveTimer);
-      this.saveTimers.delete(roomId);
-      this.logger.verbose?.(`Deleted auto save timer for room '${roomId}'`);
+    const saveAC = this.autoSaveTrackers.get(roomId);
+    if (saveAC) {
+      saveAC.abort('deleted');
+      this.autoSaveTrackers.delete(roomId);
+      this.logger.verbose?.(`Deleted auto save tracker for room '${roomId}'`);
     }
   }
 
-  private createCollaboratorModeTimer(socket: SocketIoSocket) {
+  private createCollaboratorInactivityTracker(socket: SocketIoSocket) {
     const cb = () => {
       this.logger.verbose?.(
         `User '${socket.data.userInfo.email}' was inactive ${this.collaboratorInactivityMs / 1000} seconds, setting collaborator mode to 'read' for user '${socket.data.userInfo.email}'`,
@@ -408,82 +439,77 @@ export class Server {
       });
       socket.removeAllListeners(SERVER_BROADCAST);
       // socket.data.update = false; // todo: if there are no sockets with update we can't save if there is something not saved
-      this.collaboratorModeTimers.delete(socket.id);
+      this.collaboratorInactivityTrackers.delete(socket.id);
     };
 
     const ac = new AbortController();
-    // setTimeout(this.collaboratorInactivityMs, null, {
-    //   signal: ac.signal,
-    // })
-    //   .then(() => cb())
-    //   .catch((e) => {
-    //     /* consume */
-    //   });
-    new Promise(async (res) => {
-      try {
-        await setTimeout(this.collaboratorInactivityMs, null, {
-          signal: ac.signal,
-        });
-        cb();
-      } catch (e) {
-        if (e.name === 'AbortError') {
-          this.logger.verbose?.(
-            `Collaborator mode timer for user '${socket.data.userInfo.email}' was aborted`,
-          );
-        } else {
-          this.logger.error?.(
-            `Collaborator mode timer for user '${socket.data.userInfo.email}' failed: ${e.message}`,
-          );
-        }
+    (async () => {
+      await setTimeout(this.collaboratorInactivityMs, null, {
+        signal: ac.signal,
+      });
+      cb();
+    })().catch((e) => {
+      if (isAbortError(e)) {
+        this.logger.verbose?.(
+          `Collaborator inactivity tracker for user '${socket.data.userInfo.email}' was aborted with reason '${e.cause}'`,
+        );
+      } else {
+        this.logger.error?.(
+          `Collaborator inactivity tracker for user '${socket.data.userInfo.email}' failed: ${e.message}`,
+        );
       }
-      res(null);
     });
 
     return ac;
   }
 
-  private startCollaboratorModeTimer(socket: SocketIoSocket, logging = true) {
+  private startCollaboratorInactivityTrackerForSocket(
+    socket: SocketIoSocket,
+    logging = true,
+  ) {
     // exit if already exists
-    if (this.collaboratorModeTimers.get(socket.id)) {
+    if (this.collaboratorInactivityTrackers.get(socket.id)) {
       return;
     }
     // create new
-    const abortController = this.createCollaboratorModeTimer(socket);
-    this.collaboratorModeTimers.set(socket.id, abortController);
+    const abortController = this.createCollaboratorInactivityTracker(socket);
+    this.collaboratorInactivityTrackers.set(socket.id, abortController);
     if (logging) {
       this.logger.verbose?.(
-        `Created collaborator mode timer for user '${socket.data.userInfo.email}'`,
+        `Created collaborator inactivity tracker for user '${socket.data.userInfo.email}'`,
       );
     }
   }
 
-  private deleteCollaboratorModeTimerForSocket(
+  private deleteCollaboratorInactivityTrackerForSocket(
     socket: SocketIoSocket,
     logging = true,
   ) {
-    const abortController = this.collaboratorModeTimers.get(socket.id);
+    const abortController = this.collaboratorInactivityTrackers.get(socket.id);
     if (abortController) {
       abortController.abort('deleted');
-      this.collaboratorModeTimers.delete(socket.id);
+      this.collaboratorInactivityTrackers.delete(socket.id);
 
       if (logging) {
         this.logger.verbose?.(
-          `Deleted collaborator mode timer for user '${socket.data.userInfo.email}'`,
+          `Deleted collaborator inactivity tracker for user '${socket.data.userInfo.email}'`,
         );
       }
     }
   }
 
-  private resetCollaboratorModeTimer = debounce(
+  private resetCollaboratorInactivityTrackerForSocket = debounce(
     (socket: SocketIoSocket) => {
-      const abortController = this.collaboratorModeTimers.get(socket.id);
+      const abortController = this.collaboratorInactivityTrackers.get(
+        socket.id,
+      );
       if (abortController) {
         // cancel the existing one
         abortController.abort('restart');
         // delete the existing one
-        this.deleteCollaboratorModeTimerForSocket(socket, false);
+        this.deleteCollaboratorInactivityTrackerForSocket(socket, false);
         // create new one
-        this.startCollaboratorModeTimer(socket, false);
+        this.startCollaboratorInactivityTrackerForSocket(socket, false);
       }
     },
     resetCollaboratorModeDebounceWait,
