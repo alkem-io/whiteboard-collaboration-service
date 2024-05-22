@@ -6,13 +6,14 @@ import {
   LoggerService,
   UnauthorizedException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { debounce } from 'lodash';
 import {
   CLIENT_BROADCAST,
   COLLABORATOR_MODE,
   CollaboratorModeReasons,
   CONNECTION,
-  defaultCollaboratorModeTimeout,
+  defaultCollaboratorInactivity,
   defaultContributionInterval,
   defaultSaveInterval,
   defaultSaveTimeout,
@@ -68,12 +69,13 @@ export class Server {
   private readonly contributionWindowMs: number;
   private readonly saveIntervalMs: number;
   private readonly saveTimeoutMs: number;
-  private readonly collaboratorModeTimeoutMs: number;
+  private readonly collaboratorInactivityMs: number;
   private readonly maxCollaboratorsInRoom: number;
 
   constructor(
     @Inject(WINSTON_MODULE_NEST_PROVIDER) private logger: LoggerService,
     private readonly utilService: UtilService,
+    private readonly configService: ConfigService,
   ) {
     // this.wsServer = getExcalidrawBaseServerOrFail(redisAdapterFactory);
     this.wsServer = getExcalidrawBaseServerOrFail();
@@ -83,22 +85,22 @@ export class Server {
         this.logger.verbose?.('Excalidraw server initialized and running'),
       )
       .catch(this.logger.error);
-    // todo: fetch from config
+
     const {
       contribution_window,
       save_interval,
       save_timeout,
-      collaborator_mode_timeout,
+      collaborator_inactivity,
       max_collaborators_in_room,
-      // } = this.configService.get(ConfigurationTypes.COLLABORATION)?.whiteboards;
-    } = {} as any;
+      } = this.configService.get('settings');
+    console.table(this.configService.get('settings'));
 
     this.contributionWindowMs =
       (contribution_window ?? defaultContributionInterval) * 1000;
     this.saveIntervalMs = (save_interval ?? defaultSaveInterval) * 1000;
     this.saveTimeoutMs = (save_timeout ?? defaultSaveTimeout) * 1000;
-    this.collaboratorModeTimeoutMs =
-      (collaborator_mode_timeout ?? defaultCollaboratorModeTimeout) * 1000;
+    this.collaboratorInactivityMs =
+      (collaborator_inactivity ?? defaultCollaboratorInactivity) * 1000;
     this.maxCollaboratorsInRoom = max_collaborators_in_room;
   }
 
@@ -218,7 +220,7 @@ export class Server {
             serverBroadcastEventHandler(roomID, data, socket, (roomId) =>
               this.utilService.contentModified(socket.data.userInfo.id, roomId),
             );
-            // this.resetCollaboratorModeTimer(socket); // todo
+            this.resetCollaboratorModeTimer(socket);
           });
           socket.on(SCENE_INIT, (roomID: string, data: ArrayBuffer) => {
             socket.broadcast.to(roomID).emit(CLIENT_BROADCAST, data);
@@ -396,7 +398,7 @@ export class Server {
   private createCollaboratorModeTimer(socket: SocketIoSocket) {
     const cb = () => {
       this.logger.verbose?.(
-        `User '${socket.data.userInfo.email}' was inactive ${this.collaboratorModeTimeoutMs / 1000} seconds, setting collaborator mode to 'read' for user '${socket.data.userInfo.email}'`,
+        `User '${socket.data.userInfo.email}' was inactive ${this.collaboratorInactivityMs / 1000} seconds, setting collaborator mode to 'read' for user '${socket.data.userInfo.email}'`,
       );
       // User is inactive, setting collaborator mode to 'read'
       // todo move emit, removeAllListeners, socket.data
@@ -410,7 +412,7 @@ export class Server {
     };
 
     const ac = new AbortController();
-    // setTimeout(this.collaboratorModeTimeoutMs, null, {
+    // setTimeout(this.collaboratorInactivityMs, null, {
     //   signal: ac.signal,
     // })
     //   .then(() => cb())
@@ -419,7 +421,7 @@ export class Server {
     //   });
     new Promise(async (res) => {
       try {
-        await setTimeout(this.collaboratorModeTimeoutMs, null, {
+        await setTimeout(this.collaboratorInactivityMs, null, {
           signal: ac.signal,
         });
         cb();

@@ -102,11 +102,11 @@ export class WhiteboardIntegrationAdapterService {
       .pipe(timeout({ first: timeoutMs }));
 
     return firstValueFrom(result$).catch((err) => {
-      this.logger.error(err?.message, err?.stack, {
+      this.logger.error(err?.message ?? err, err?.stack, JSON.stringify({
         pattern,
         data,
         timeout: timeoutMs,
-      });
+      }));
 
       throw new Error('Error while processing integration request.');
     });
