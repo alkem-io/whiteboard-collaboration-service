@@ -4,7 +4,7 @@ const http = require('http'); // todo why is that?
 import { Namespace, Server as SocketIO } from 'socket.io';
 import { Adapter } from 'socket.io-adapter';
 import { SocketIoServer } from './types';
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+
 export const getExcalidrawBaseServerOrFail = (
   adapterFactory?: typeof Adapter | ((nsp: Namespace) => Adapter),
 ): SocketIoServer | never => {
