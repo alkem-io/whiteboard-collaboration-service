@@ -24,8 +24,6 @@ settings:
   save_timeout: ${AUTOSAVE_TIMEOUT}:10
   # SECONDS of inactivity before a collaborator is made view-only
   collaborator_inactivity: ${COLLABORATOR_INACTIVITY}:1800
-  # number of simultaneous collaborators
-  max_collaborators_in_room: ${MAX_COLLABORATORS_IN_ROOM}:20
   # how often the inactivity timer is reset;
   # you want it to be large enough to not reset too frequently,
   # but small enough to be accurate

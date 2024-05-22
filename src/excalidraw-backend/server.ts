@@ -69,7 +69,6 @@ export class Server {
   private readonly saveIntervalMs: number;
   private readonly saveTimeoutMs: number;
   private readonly collaboratorInactivityMs: number;
-  private readonly maxCollaboratorsInRoom: number;
 
   constructor(
     @Inject(WINSTON_MODULE_NEST_PROVIDER) private logger: LoggerService,
@@ -90,7 +89,6 @@ export class Server {
       save_interval,
       save_timeout,
       collaborator_inactivity,
-      max_collaborators_in_room,
     } = this.configService.get('settings');
     console.table(this.configService.get('settings'));
 
@@ -100,7 +98,6 @@ export class Server {
     this.saveTimeoutMs = (save_timeout ?? defaultSaveTimeout) * 1000;
     this.collaboratorInactivityMs =
       (collaborator_inactivity ?? defaultCollaboratorInactivity) * 1000;
-    this.maxCollaboratorsInRoom = max_collaborators_in_room;
   }
 
   private async fetchSocketsSafe(roomID: string) {
