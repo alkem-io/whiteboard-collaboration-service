@@ -1,0 +1,14 @@
+rabbitmq:
+  # Connection in the form of 'amqp://[user]:[password]@[host]:[port]?heartbeat=30'
+  connection:
+    # RabbitMQ host
+    host: ${RABBITMQ_HOST}:localhost
+
+    # RabbitMQ AMQP port. Used by AMQP 0-9-1 and 1.0 clients without and with TLS
+    port: ${RABBITMQ_PORT}:5672
+
+    # RabbitMQ user
+    user: ${RABBITMQ_USER}:alkemio-admin
+
+    # RabbitMQ password
+    password: ${RABBITMQ_PASSWORD}:alkemio!

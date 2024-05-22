@@ -1,0 +1,15 @@
+language: node_js
+node_js:
+  - v16.15.0
+env:
+  matrix:
+    - NODE_OPTIONS="--max-old-space-size=4196"
+cache:
+  directories:
+    - node_modules
+install:
+  - npm install
+before_install:
+  - npm i -g npm@8.5.5
+script:
+  - npm run test:ci
