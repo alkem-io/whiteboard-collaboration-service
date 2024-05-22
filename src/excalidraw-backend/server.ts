@@ -368,9 +368,12 @@ export class Server {
       // log the response
       this.logResponse(response, randomSocketWithUpdateFlag, roomId);
     } catch (e) {
-      this.logger.error?.(
-        `User '${randomSocketWithUpdateFlag.data.userInfo.email}' did not respond to '${SERVER_SAVE_REQUEST}' event after ${timeout}ms`,
-      );
+      if (this.autoSaveTrackers.get(roomId)) {
+        // avoid false-positives where the room is deleted and the save request is still running
+        this.logger.error?.(
+          `User '${randomSocketWithUpdateFlag.data.userInfo.email}' did not respond to '${SERVER_SAVE_REQUEST}' event after ${timeout}ms`,
+        );
+      }
       return false;
     }
 
@@ -382,7 +385,8 @@ export class Server {
     socket: RemoteSocketIoSocket,
     roomId: string,
   ) {
-    if (!response.success) {
+    if (!response.success && this.autoSaveTrackers.get(roomId)) {
+      // avoid false-positives where the room is deleted and the save request is still running
       this.logger.error(
         `User ${
           socket.data.userInfo.email
