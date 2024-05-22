@@ -1,10 +1,10 @@
 {
-  "name": "whiteboard-backend",
-  "version": "0.0.1",
-  "description": "",
-  "author": "",
-  "private": true,
-  "license": "UNLICENSED",
+  "name": "whiteboard-collaboration-service",
+  "version": "0.1.0",
+  "description": "Alkemio Whiteboard Collaboration Service for Excalidraw backend",
+  "author": "Alkemio Foundation",
+  "private": false,
+  "license": "EUPL-1.2",
   "scripts": {
     "build": "nest build",
     "format": "prettier --write \\\"src/**/*.ts\\\" \\\"test/**/*.ts\\\"",
