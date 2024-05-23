@@ -1,18 +1,17 @@
-// import http from 'http';
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const http = require('http'); // todo why is that?
+import * as http from 'node:http';
+import { LoggerService } from '@nestjs/common';
 import { Namespace, Server as SocketIO } from 'socket.io';
 import { Adapter } from 'socket.io-adapter';
 import { SocketIoServer } from './types';
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-export const getExcalidrawBaseServerOrFail = (
-  adapterFactory?: typeof Adapter | ((nsp: Namespace) => Adapter),
-): SocketIoServer | never => {
-  const port = 4002;
 
+export const getExcalidrawBaseServerOrFail = (
+  port: number,
+  logger: LoggerService,
+  adapterFactory?: typeof Adapter | ((nsp: Namespace) => Adapter),
+): SocketIoServer => {
   const httpServer = http.createServer();
   httpServer.listen(port, () => {
-    console.log('Listening on port', port);
+    logger.verbose?.(`Listening on port ${port}`);
   });
 
   return new SocketIO(httpServer, {

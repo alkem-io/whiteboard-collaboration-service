@@ -52,6 +52,7 @@ import {
 import { CREATE_ROOM, DELETE_ROOM } from './adapters/adapter.event.names';
 import { APP_ID } from '../app.id';
 import { arrayRandomElement, isAbortError } from '../util';
+import { ConfigType } from '../config';
 
 type SaveMessageOpts = { timeout: number };
 type RoomTrackers = Map<string, AbortController>;
@@ -73,10 +74,13 @@ export class Server {
   constructor(
     @Inject(WINSTON_MODULE_NEST_PROVIDER) private logger: LoggerService,
     private readonly utilService: UtilService,
-    private readonly configService: ConfigService,
+    private readonly configService: ConfigService<ConfigType, true>,
   ) {
+    const port = this.configService.get('settings.collaboration.port', {
+      infer: true,
+    });
     // this.wsServer = getExcalidrawBaseServerOrFail(redisAdapterFactory);
-    this.wsServer = getExcalidrawBaseServerOrFail();
+    this.wsServer = getExcalidrawBaseServerOrFail(port, logger);
     // don't block the constructor
     this.init()
       .then(() =>
@@ -89,8 +93,7 @@ export class Server {
       save_interval,
       save_timeout,
       collaborator_inactivity,
-    } = this.configService.get('settings');
-    console.table(this.configService.get('settings'));
+    } = this.configService.get('settings.collaboration', { infer: true });
 
     this.contributionWindowMs =
       (contribution_window ?? defaultContributionInterval) * 1000;
@@ -254,7 +257,7 @@ export class Server {
 
   private startContributionTrackerForRoom(roomId: string) {
     const ac = new AbortController();
-    // todo maybe throws
+
     (async () => {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       for await (const _ of setInterval(this.contributionWindowMs, null, {
@@ -368,9 +371,12 @@ export class Server {
       // log the response
       this.logResponse(response, randomSocketWithUpdateFlag, roomId);
     } catch (e) {
-      this.logger.error?.(
-        `User '${randomSocketWithUpdateFlag.data.userInfo.email}' did not respond to '${SERVER_SAVE_REQUEST}' event after ${timeout}ms`,
-      );
+      if (this.autoSaveTrackers.get(roomId)) {
+        // avoid false-positives where the room is deleted and the save request is still running
+        this.logger.error?.(
+          `User '${randomSocketWithUpdateFlag.data.userInfo.email}' did not respond to '${SERVER_SAVE_REQUEST}' event after ${timeout}ms`,
+        );
+      }
       return false;
     }
 
@@ -382,7 +388,8 @@ export class Server {
     socket: RemoteSocketIoSocket,
     roomId: string,
   ) {
-    if (!response.success) {
+    if (!response.success && this.autoSaveTrackers.get(roomId)) {
+      // avoid false-positives where the room is deleted and the save request is still running
       this.logger.error(
         `User ${
           socket.data.userInfo.email
@@ -437,7 +444,8 @@ export class Server {
         reason: CollaboratorModeReasons.INACTIVITY,
       });
       socket.removeAllListeners(SERVER_BROADCAST);
-      // socket.data.update = false; // todo: if there are no sockets with update we can't save if there is something not saved
+      // if there are no sockets with update we can't save if there is something not saved
+      // socket.data.update = false;
       this.collaboratorInactivityTrackers.delete(socket.id);
     };
 
