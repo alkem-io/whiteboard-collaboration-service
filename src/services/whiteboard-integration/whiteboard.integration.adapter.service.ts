@@ -31,7 +31,17 @@ export class WhiteboardIntegrationAdapterService {
     const rabbitMqOptions = this.configService.get('rabbitmq.connection', {
       infer: true,
     });
-    this.client = authQueueClientProxyFactory(rabbitMqOptions, this.logger);
+    const queue = this.configService.get('settings.application.queue', {
+      infer: true,
+    });
+
+    this.client = authQueueClientProxyFactory(
+      {
+        ...rabbitMqOptions,
+        queue,
+      },
+      this.logger,
+    );
 
     if (!this.client) {
       console.error(
@@ -147,13 +157,14 @@ const authQueueClientProxyFactory = (
     password: string;
     host: string;
     port: number;
+    heartbeat: number;
+    queue: string;
   },
   logger: LoggerService,
 ): ClientProxy | undefined => {
-  const { host, port, user, password } = config;
-  // todo: move to config
-  const heartbeat = process.env.NODE_ENV === 'production' ? '30' : '120';
-  const queue = 'auth';
+  const { host, port, user, password, heartbeat: _heartbeat, queue } = config;
+  const heartbeat =
+    process.env.NODE_ENV === 'production' ? _heartbeat : _heartbeat * 3;
   const connectionString = `amqp://${user}:${password}@${host}:${port}?heartbeat=${heartbeat}`;
   try {
     const options = {

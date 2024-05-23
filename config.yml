@@ -1,17 +1,16 @@
 rabbitmq:
-  # Connection in the form of 'amqp://[user]:[password]@[host]:[port]?heartbeat=30'
+  # Connection in the form of 'amqp://[user]:[password]@[host]:[port]?heartbeat=[heartbeat]'
   connection:
     # RabbitMQ host
     host: ${RABBITMQ_HOST}:localhost
-
     # RabbitMQ AMQP port. Used by AMQP 0-9-1 and 1.0 clients without and with TLS
     port: ${RABBITMQ_PORT}:5672
-
     # RabbitMQ user
     user: ${RABBITMQ_USER}:alkemio-admin
-
     # RabbitMQ password
     password: ${RABBITMQ_PASSWORD}:alkemio!
+    # heartbeat
+    heartbeat: ${RABBITMQ_HEARTBEAT}:30
 
 monitoring:
   logging:
@@ -30,6 +29,8 @@ monitoring:
 settings:
   # application level settings
   application:
+    # queue
+    queue: ${QUEUE}:auth
     # MILLISECONDS wait time for a response after a request on the message queue
     queue_response_timeout: ${QUEUE_RESPONSE_TIMEOUT}:10000
   # the collaboration experience

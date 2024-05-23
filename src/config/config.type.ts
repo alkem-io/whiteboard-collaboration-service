@@ -5,6 +5,7 @@ export interface ConfigType {
       port: number;
       user: string;
       password: string;
+      heartbeat: number;
     };
   };
   monitoring: {
@@ -16,6 +17,7 @@ export interface ConfigType {
   };
   settings: {
     application: {
+      queue: string;
       queue_response_timeout: number;
     };
     collaboration: {

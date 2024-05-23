@@ -5,6 +5,7 @@ import {
   ContentModifiedInputData,
   ContributionInputData,
   InfoInputData,
+  WhoInputData,
 } from '../whiteboard-integration/inputs';
 
 @Injectable()
@@ -20,12 +21,12 @@ export class UtilService {
     const { cookie, authorizationHeader } = opts;
 
     if (cookie) {
-      return this.integrationService.who({ cookie });
+      return this.integrationService.who(new WhoInputData(cookie));
     }
 
     if (authorizationHeader) {
       const [, token] = authorizationHeader.split(' ');
-      return this.integrationService.who({ token });
+      return this.integrationService.who(new WhoInputData(token));
     }
 
     throw new Error('No cookie or authorization header provided');

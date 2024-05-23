@@ -1,8 +1,5 @@
-// import http from 'http';
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+import * as http from 'node:http';
 import { LoggerService } from '@nestjs/common';
-
-const http = require('http'); // todo why is that?
 import { Namespace, Server as SocketIO } from 'socket.io';
 import { Adapter } from 'socket.io-adapter';
 import { SocketIoServer } from './types';

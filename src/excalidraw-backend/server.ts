@@ -257,7 +257,7 @@ export class Server {
 
   private startContributionTrackerForRoom(roomId: string) {
     const ac = new AbortController();
-    // todo maybe throws
+
     (async () => {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       for await (const _ of setInterval(this.contributionWindowMs, null, {
@@ -444,7 +444,8 @@ export class Server {
         reason: CollaboratorModeReasons.INACTIVITY,
       });
       socket.removeAllListeners(SERVER_BROADCAST);
-      // socket.data.update = false; // todo: if there are no sockets with update we can't save if there is something not saved
+      // if there are no sockets with update we can't save if there is something not saved
+      // socket.data.update = false;
       this.collaboratorInactivityTrackers.delete(socket.id);
     };
 
