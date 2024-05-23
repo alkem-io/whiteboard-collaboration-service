@@ -52,6 +52,7 @@ import {
 import { CREATE_ROOM, DELETE_ROOM } from './adapters/adapter.event.names';
 import { APP_ID } from '../app.id';
 import { arrayRandomElement, isAbortError } from '../util';
+import { ConfigType } from '../config';
 
 type SaveMessageOpts = { timeout: number };
 type RoomTrackers = Map<string, AbortController>;
@@ -73,10 +74,13 @@ export class Server {
   constructor(
     @Inject(WINSTON_MODULE_NEST_PROVIDER) private logger: LoggerService,
     private readonly utilService: UtilService,
-    private readonly configService: ConfigService,
+    private readonly configService: ConfigService<ConfigType, true>,
   ) {
+    const port = this.configService.get('settings.collaboration.port', {
+      infer: true,
+    });
     // this.wsServer = getExcalidrawBaseServerOrFail(redisAdapterFactory);
-    this.wsServer = getExcalidrawBaseServerOrFail();
+    this.wsServer = getExcalidrawBaseServerOrFail(port, logger);
     // don't block the constructor
     this.init()
       .then(() =>
@@ -89,8 +93,7 @@ export class Server {
       save_interval,
       save_timeout,
       collaborator_inactivity,
-    } = this.configService.get('settings');
-    console.table(this.configService.get('settings'));
+    } = this.configService.get('settings.collaboration', { infer: true });
 
     this.contributionWindowMs =
       (contribution_window ?? defaultContributionInterval) * 1000;

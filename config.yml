@@ -13,18 +13,40 @@ rabbitmq:
     # RabbitMQ password
     password: ${RABBITMQ_PASSWORD}:alkemio!
 
+monitoring:
+  logging:
+    # A flag setting whether Winston Console transport will be enabled.
+    # If the flag is set to true logs of the appropriate level (see below) will be outputted to the console
+    # after the application has been bootstrapped.
+    # The NestJS bootstrap process is handled by the internal NestJS logging.
+    enabled: ${LOGGING_CONSOLE_ENABLED}:true
+    # Logging level for outputs to console.
+    # Valid values are log|error|warn|debug|verbose.
+    level: ${LOGGING_LEVEL_CONSOLE}:verbose
+    # The logging format will be in json - useful for parsing
+    # if disabled - will be in a human-readable form
+    json: ${LOGGING_FORMAT_JSON}:false
+
 settings:
-  enabled: ${ENABLED}:true
-  # the window in which contributions are accepted to be counted towards a single contribution event;
-  # time is in SECONDS
-  contribution_window: ${CONTRIBUTION_WINDOW}:600
-  # SECONDS between saves
-  save_interval: ${AUTOSAVE_INTERVAL}:15
-  # SECONDS to wait after the request is saved, before it fails
-  save_timeout: ${AUTOSAVE_TIMEOUT}:10
-  # SECONDS of inactivity before a collaborator is made view-only
-  collaborator_inactivity: ${COLLABORATOR_INACTIVITY}:1800
-  # how often the inactivity timer is reset;
-  # you want it to be large enough to not reset too frequently,
-  # but small enough to be accurate
-  reset_collaborator_mode_debounce: ${INACTIVITY_DEBOUNCE}:1000
+  # application level settings
+  application:
+    # MILLISECONDS wait time for a response after a request on the message queue
+    queue_response_timeout: ${QUEUE_RESPONSE_TIMEOUT}:10000
+  # the collaboration experience
+  collaboration:
+    enabled: ${ENABLED}:true
+    #
+    port: ${PORT}:4002
+    # the window in which contributions are accepted to be counted towards a single contribution event;
+    # time is in SECONDS
+    contribution_window: ${CONTRIBUTION_WINDOW}:600
+    # SECONDS between saves
+    save_interval: ${AUTOSAVE_INTERVAL}:15
+    # SECONDS to wait after the request is saved, before it fails
+    save_timeout: ${AUTOSAVE_TIMEOUT}:10
+    # SECONDS of inactivity before a collaborator is made view-only
+    collaborator_inactivity: ${COLLABORATOR_INACTIVITY}:1800
+    # how often the inactivity timer is reset;
+    # you want it to be large enough to not reset too frequently,
+    # but small enough to be accurate
+    reset_collaborator_mode_debounce: ${INACTIVITY_DEBOUNCE}:1000
