@@ -17,25 +17,42 @@ import {
 import { InfoOutputData } from './outputs';
 import { WhiteboardIntegrationEventPattern } from './event.pattern.enum';
 import { ConfigService } from '@nestjs/config';
-
-const timeoutMs = 10000;
+import { ConfigType } from '../../config';
 
 @Injectable()
 export class WhiteboardIntegrationAdapterService {
   private readonly client: ClientProxy | undefined;
+  private readonly timeoutMs: number;
 
   constructor(
     @Inject(WINSTON_MODULE_NEST_PROVIDER) private logger: LoggerService,
-    private readonly configService: ConfigService,
+    private readonly configService: ConfigService<ConfigType, true>,
   ) {
-    const rabbitMqOptions = configService?.get('rabbitmq').connection;
-    this.client = authQueueClientProxyFactory(rabbitMqOptions);
+    const rabbitMqOptions = this.configService.get('rabbitmq.connection', {
+      infer: true,
+    });
+    const queue = this.configService.get('settings.application.queue', {
+      infer: true,
+    });
+
+    this.client = authQueueClientProxyFactory(
+      {
+        ...rabbitMqOptions,
+        queue,
+      },
+      this.logger,
+    );
 
     if (!this.client) {
       console.error(
         `${WhiteboardIntegrationAdapterService.name} not initialized`,
       );
     }
+
+    this.timeoutMs = this.configService.get(
+      'settings.application.queue_response_timeout',
+      { infer: true },
+    );
   }
 
   public async who(data: WhoInputData) {
@@ -99,7 +116,7 @@ export class WhiteboardIntegrationAdapterService {
 
     const result$ = this.client
       .send<TResult, TInput>(pattern, data)
-      .pipe(timeout({ first: timeoutMs }));
+      .pipe(timeout({ first: this.timeoutMs }));
 
     return firstValueFrom(result$).catch((err) => {
       this.logger.error(
@@ -108,7 +125,7 @@ export class WhiteboardIntegrationAdapterService {
         JSON.stringify({
           pattern,
           data,
-          timeout: timeoutMs,
+          timeout: this.timeoutMs,
         }),
       );
 
@@ -134,16 +151,20 @@ export class WhiteboardIntegrationAdapterService {
   };
 }
 
-const authQueueClientProxyFactory = (config: {
-  user: string;
-  password: string;
-  host: string;
-  port: string;
-}): ClientProxy | undefined => {
-  const { host, port, user, password } = config;
-  // todo: move to config
-  const heartbeat = process.env.NODE_ENV === 'production' ? '30' : '120';
-  const queue = 'auth';
+const authQueueClientProxyFactory = (
+  config: {
+    user: string;
+    password: string;
+    host: string;
+    port: number;
+    heartbeat: number;
+    queue: string;
+  },
+  logger: LoggerService,
+): ClientProxy | undefined => {
+  const { host, port, user, password, heartbeat: _heartbeat, queue } = config;
+  const heartbeat =
+    process.env.NODE_ENV === 'production' ? _heartbeat : _heartbeat * 3;
   const connectionString = `amqp://${user}:${password}@${host}:${port}?heartbeat=${heartbeat}`;
   try {
     const options = {
@@ -154,11 +175,7 @@ const authQueueClientProxyFactory = (config: {
     };
     return ClientProxyFactory.create({ transport: Transport.RMQ, options });
   } catch (err) {
-    // logger.error(
-    //   `Could not connect to RabbitMQ: ${err}, logging in...`,
-    //   LogContext.WHITEBOARD_AUTH,
-    // );
-    console.error(err);
+    logger.error(`Could not connect to RabbitMQ: ${err}`);
     return undefined;
   }
 };
