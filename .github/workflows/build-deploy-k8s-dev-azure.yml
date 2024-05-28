@@ -1,7 +1,7 @@
 name: Build, Migrate & Deploy to Dev
 
 on:
-  workflow_dispatch:
+  push:
 
 jobs:
   build:
