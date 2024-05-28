@@ -2,6 +2,7 @@ name: Build, Migrate & Deploy to Dev
 
 on:
   push:
+    branches: [develop]
 
 jobs:
   build:
