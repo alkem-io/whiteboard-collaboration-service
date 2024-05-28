@@ -1,6 +1,6 @@
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import { Inject, Injectable, LoggerService } from '@nestjs/common';
-import { firstValueFrom, map, tap, timeInterval, timeout } from 'rxjs';
+import { firstValueFrom, map, timeInterval, timeout } from 'rxjs';
 import {
   ClientProxy,
   ClientProxyFactory,
