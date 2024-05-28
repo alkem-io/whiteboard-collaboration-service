@@ -1,6 +1,6 @@
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import { Inject, Injectable, LoggerService } from '@nestjs/common';
-import { firstValueFrom, timeout } from 'rxjs';
+import { firstValueFrom, map, tap, timeInterval, timeout } from 'rxjs';
 import {
   ClientProxy,
   ClientProxyFactory,
@@ -125,9 +125,19 @@ export class WhiteboardIntegrationAdapterService {
       throw new Error(`Connection was not established. Send failed.`);
     }
 
-    const result$ = this.client
-      .send<TResult, TInput>(pattern, data)
-      .pipe(timeout({ first: this.timeoutMs }));
+    const result$ = this.client.send<TResult, TInput>(pattern, data).pipe(
+      timeInterval(),
+      map((x) => {
+        this.logger.debug?.({
+          method: `sendWithResponse response took ${x.interval}`,
+          pattern,
+          data,
+          value: x.value,
+        });
+        return x.value;
+      }),
+      timeout({ each: this.timeoutMs }),
+    );
 
     return firstValueFrom(result$).catch((err) => {
       this.logger.error(
@@ -157,6 +167,12 @@ export class WhiteboardIntegrationAdapterService {
     if (!this.client) {
       throw new Error(`Connection was not established. Send failed.`);
     }
+
+    this.logger.debug?.({
+      method: 'sendWithoutResponse',
+      pattern,
+      data,
+    });
 
     this.client.emit<void, TInput>(pattern, data);
   };
