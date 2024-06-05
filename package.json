@@ -1,6 +1,6 @@
 {
   "name": "whiteboard-collaboration-service",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Alkemio Whiteboard Collaboration Service for Excalidraw backend",
   "author": "Alkemio Foundation",
   "private": false,

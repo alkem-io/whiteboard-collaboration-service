@@ -129,7 +129,7 @@ export class WhiteboardIntegrationAdapterService {
       timeInterval(),
       map((x) => {
         this.logger.debug?.({
-          method: `sendWithResponse response took ${x.interval}`,
+          method: `sendWithResponse response took ${x.interval}ms`,
           pattern,
           data,
           value: x.value,
@@ -141,13 +141,13 @@ export class WhiteboardIntegrationAdapterService {
 
     return firstValueFrom(result$).catch((err) => {
       this.logger.error(
-        err?.message ?? err,
-        err?.stack,
-        JSON.stringify({
+        {
+          message: `Error was received while waiting for response: ${err?.message ?? err}`,
           pattern,
           data,
           timeout: this.timeoutMs,
-        }),
+        },
+        err?.stack,
       );
 
       throw new Error('Error while processing integration request.');

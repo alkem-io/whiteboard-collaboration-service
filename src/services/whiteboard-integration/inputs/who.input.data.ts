@@ -2,9 +2,11 @@ import { BaseInputData } from './base.input.data';
 
 export class WhoInputData extends BaseInputData {
   constructor(
-    public cookie?: string,
-    public token?: string,
+    public auth: {
+      cookie?: string;
+      authorization?: string;
+    },
   ) {
-    super('who');
+    super('who-input');
   }
 }
