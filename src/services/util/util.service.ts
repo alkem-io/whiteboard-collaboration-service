@@ -16,17 +16,16 @@ export class UtilService {
 
   public async getUserInfo(opts: {
     cookie?: string;
-    authorizationHeader?: string;
+    authorization?: string;
   }): Promise<UserInfo | never> {
-    const { cookie, authorizationHeader } = opts;
+    const { cookie, authorization } = opts;
 
-    if (cookie) {
-      return this.integrationService.who(new WhoInputData(cookie));
+    if (authorization) {
+      return this.integrationService.who(new WhoInputData({ authorization }));
     }
 
-    if (authorizationHeader) {
-      const [, token] = authorizationHeader.split(' ');
-      return this.integrationService.who(new WhoInputData(token));
+    if (cookie) {
+      return this.integrationService.who(new WhoInputData({ cookie }));
     }
 
     throw new Error('No cookie or authorization header provided');

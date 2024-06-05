@@ -410,6 +410,7 @@ export class Server {
 
   private getUserInfo(socket: SocketIoSocket): Promise<UserInfo | undefined> {
     return this.utilService.getUserInfo({
+      authorization: socket.handshake.headers.authorization,
       cookie: socket.handshake.headers.cookie,
     });
   }
