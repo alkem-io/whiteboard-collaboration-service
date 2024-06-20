@@ -37,7 +37,7 @@ settings:
   collaboration:
     enabled: ${ENABLED}:true
     #
-    port: ${PORT}:4002
+    port: ${COLLABORATION_PORT}:4002
     # the window in which contributions are accepted to be counted towards a single contribution event;
     # time is in SECONDS
     contribution_window: ${CONTRIBUTION_WINDOW}:600
@@ -51,3 +51,6 @@ settings:
     # you want it to be large enough to not reset too frequently,
     # but small enough to be accurate
     reset_collaborator_mode_debounce: ${INACTIVITY_DEBOUNCE}:1000
+  rest:
+    # the REST API
+    port: ${REST_PORT}:4005
