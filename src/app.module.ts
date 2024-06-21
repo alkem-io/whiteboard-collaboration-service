@@ -4,11 +4,13 @@ import { ConfigModule } from '@nestjs/config';
 import { WinstonConfigService } from './config/winston.config';
 import { ServerModule } from './excalidraw-backend/server.module';
 import configuration from './config/configuration';
-import { HealthController } from './health.controller';
+import { HealthController } from './services/health/health.controller';
+import { HealthModule } from './services/health/health.module';
 
 @Module({
   imports: [
     ServerModule,
+    HealthModule,
     ConfigModule.forRoot({
       envFilePath: ['.env'],
       isGlobal: true,
@@ -18,7 +20,6 @@ import { HealthController } from './health.controller';
       useClass: WinstonConfigService,
     }),
   ],
-  controllers: [HealthController],
 })
 export class AppModule {
   configure(consumer: MiddlewareConsumer) {
