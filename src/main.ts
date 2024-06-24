@@ -1,6 +1,8 @@
 import { NestFactory } from '@nestjs/core';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import { AppModule } from './app.module';
+import { ConfigService } from '@nestjs/config';
+import { ConfigType } from './config';
 
 (async () => {
   const app = await NestFactory.create(AppModule, {
@@ -14,4 +16,12 @@ import { AppModule } from './app.module';
   });
   const logger = app.get(WINSTON_MODULE_NEST_PROVIDER);
   app.useLogger(logger);
+
+  const configService: ConfigService<ConfigType, true> = app.get(ConfigService);
+  const port = configService.get('settings.rest.port', {
+    infer: true,
+  });
+  await app.listen(port, () => {
+    logger.verbose?.(`Rest endpoint running on port ${port}`);
+  });
 })();

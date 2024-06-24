@@ -29,5 +29,8 @@ export interface ConfigType {
       collaborator_inactivity: number;
       reset_collaborator_mode_debounce: number;
     };
+    rest: {
+      port: number;
+    };
   };
 }

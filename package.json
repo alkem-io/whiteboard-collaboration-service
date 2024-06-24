@@ -1,6 +1,6 @@
 {
   "name": "whiteboard-collaboration-service",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Alkemio Whiteboard Collaboration Service for Excalidraw backend",
   "author": "Alkemio Foundation",
   "private": false,
@@ -31,7 +31,7 @@
     "reflect-metadata": "^0.2.0",
     "rxjs": "^7.8.1",
     "socket.io": "^4.7.5",
-    "socket.io-adapter": "^2.5.4",
+    "socket.io-adapter": "^2.5.5",
     "yaml": "^2.4.2"
   },
   "devDependencies": {

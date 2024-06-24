@@ -14,11 +14,12 @@ import {
   ContributionInputData,
   InfoInputData,
 } from './inputs';
-import { InfoOutputData } from './outputs';
+import { HealthCheckOutputData, InfoOutputData } from './outputs';
 import { WhiteboardIntegrationEventPattern } from './event.pattern.enum';
 import { ConfigService } from '@nestjs/config';
 import { ConfigType } from '../../config';
 import { RmqOptions } from '@nestjs/microservices/interfaces/microservice-configuration.interface';
+import { RMQConnectionError } from './types';
 
 @Injectable()
 export class WhiteboardIntegrationAdapterService {
@@ -110,20 +111,37 @@ export class WhiteboardIntegrationAdapterService {
       // ... do nothing
     }
   }
+  /**
+   * Is there a healthy connection to the queue
+   */
+  public async isConnected(): Promise<boolean> {
+    return this.sendWithResponse<HealthCheckOutputData, string>(
+      WhiteboardIntegrationMessagePattern.HEALTH_CHECK,
+      'healthy?',
+      { timeoutMs: 3000 },
+    )
+      .then((resp) => resp.healthy)
+      .catch(() => false);
+  }
+
   // todo: work on exception handling: logging here vs at consumer
   /**
    * Sends a message to the queue and waits for a response.
    * Each consumer needs to manually handle failures, returning the proper type.
    * @param pattern
    * @param data
+   * @param options
    */
   private sendWithResponse = async <TResult, TInput>(
     pattern: WhiteboardIntegrationMessagePattern,
     data: TInput,
+    options?: { timeoutMs?: number },
   ): Promise<TResult | never> => {
     if (!this.client) {
       throw new Error(`Connection was not established. Send failed.`);
     }
+
+    const timeoutMs = options?.timeoutMs ?? this.timeoutMs;
 
     const result$ = this.client.send<TResult, TInput>(pattern, data).pipe(
       timeInterval(),
@@ -136,18 +154,18 @@ export class WhiteboardIntegrationAdapterService {
         });
         return x.value;
       }),
-      timeout({ each: this.timeoutMs }),
+      timeout({ each: timeoutMs }),
     );
 
-    return firstValueFrom(result$).catch((err) => {
+    return firstValueFrom(result$).catch(({ err }: RMQConnectionError) => {
       this.logger.error(
         {
-          message: `Error was received while waiting for response: ${err?.message ?? err}`,
+          message: `Error was received while waiting for response: ${err.message}`,
           pattern,
           data,
-          timeout: this.timeoutMs,
+          timeout: timeoutMs,
         },
-        err?.stack,
+        err.stack,
       );
 
       throw new Error('Error while processing integration request.');

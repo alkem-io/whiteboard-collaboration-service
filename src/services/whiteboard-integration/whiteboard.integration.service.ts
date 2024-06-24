@@ -13,6 +13,10 @@ export class WhiteboardIntegrationService {
     private readonly integrationAdapter: WhiteboardIntegrationAdapterService,
   ) {}
 
+  public isConnected(): Promise<boolean> {
+    return this.integrationAdapter.isConnected();
+  }
+
   public who(data: WhoInputData) {
     return this.integrationAdapter.who(data);
   }
