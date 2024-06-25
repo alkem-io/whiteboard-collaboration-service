@@ -1,5 +1,5 @@
 export enum WhiteboardIntegrationMessagePattern {
-  ACCESS_GRANTED = 'accessGranted',
   WHO = 'who',
   INFO = 'info',
+  HEALTH_CHECK = 'health-check',
 }

@@ -11,7 +11,7 @@ export const getExcalidrawBaseServerOrFail = (
 ): SocketIoServer => {
   const httpServer = http.createServer();
   httpServer.listen(port, () => {
-    logger.verbose?.(`Listening on port ${port}`);
+    logger.verbose?.(`Collaboration endpoint Listening on port ${port}`);
   });
 
   return new SocketIO(httpServer, {
