@@ -1,4 +1,5 @@
 import { SocketIoSocket } from '../types';
+import { UserIdleState } from '../types/user.idle.state';
 import { SimpleMiddlewareHandler } from './middleware.handler.type';
 
 export const initUserDataMiddleware: SimpleMiddlewareHandler = (
@@ -10,7 +11,12 @@ export const initUserDataMiddleware: SimpleMiddlewareHandler = (
   socket.data.lastPresence = -1;
 
   socket.data.read = false;
-  socket.data.update = false;
+  socket.data.collaborator = false;
+
+  socket.data.state = UserIdleState.ACTIVE;
+
+  socket.data.failedSaves = 0;
+  socket.data.canSave = false;
 
   socket.data.session = undefined;
 

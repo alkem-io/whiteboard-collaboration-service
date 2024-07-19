@@ -42,6 +42,7 @@ import { UserInfo } from '../services/whiteboard-integration/user.info';
 import { UtilService } from '../services/util/util.service';
 import {
   authorizeWithRoomAndJoinHandler,
+  canSocketSave,
   closeConnection,
   disconnectEventHandler,
   disconnectingEventHandler,
@@ -69,6 +70,7 @@ export class Server {
   private readonly contributionWindowMs: number;
   private readonly saveIntervalMs: number;
   private readonly saveTimeoutMs: number;
+  private readonly saveConsecutiveFailedAttempts: number;
   private readonly collaboratorInactivityMs: number;
 
   constructor(
@@ -92,15 +94,18 @@ export class Server {
       contribution_window,
       save_interval,
       save_timeout,
+      save_consecutive_failed_attempts,
       collaborator_inactivity,
     } = this.configService.get('settings.collaboration', { infer: true });
 
     this.contributionWindowMs =
       (contribution_window ?? defaultContributionInterval) * 1000;
-    this.saveIntervalMs = (save_interval ?? defaultSaveInterval) * 1000;
-    this.saveTimeoutMs = (save_timeout ?? defaultSaveTimeout) * 1000;
     this.collaboratorInactivityMs =
       (collaborator_inactivity ?? defaultCollaboratorInactivity) * 1000;
+
+    this.saveIntervalMs = (save_interval ?? defaultSaveInterval) * 1000;
+    this.saveTimeoutMs = (save_timeout ?? defaultSaveTimeout) * 1000;
+    this.saveConsecutiveFailedAttempts = save_consecutive_failed_attempts;
   }
 
   private async fetchSocketsSafe(roomID: string) {
@@ -213,7 +218,7 @@ export class Server {
             this.utilService.getUserInfoForRoom(userId, roomId),
         );
 
-        if (socket.data.update) {
+        if (socket.data.collaborator) {
           this.startCollaboratorInactivityTrackerForSocket(socket);
           // user can broadcast content change events
           socket.on(SERVER_BROADCAST, (roomID: string, data: ArrayBuffer) => {
@@ -227,7 +232,7 @@ export class Server {
           });
         }
         this.logger.verbose?.(
-          `User '${socket.data.userInfo.email}' read=${socket.data.read}, update=${socket.data.update}`,
+          `User '${socket.data.userInfo.email}' read=${socket.data.read}, update=${socket.data.collaborator}`,
         );
       });
 
@@ -311,18 +316,25 @@ export class Server {
       for await (const _ of setInterval(this.saveIntervalMs, null, {
         signal: ac.signal,
       })) {
-        const saved = await this.sendSaveMessage(roomId, {
+        const data = await this.sendSaveMessage(roomId, {
           timeout: this.saveTimeoutMs,
         });
 
-        if (saved === undefined) {
+        if (data === undefined) {
           this.logger.verbose?.(
             `No eligible sockets found to save '${roomId}'`,
           );
-        } else if (saved) {
-          this.logger.verbose?.(`Saving '${roomId}' successful`);
+        } else if (data.saved) {
+          this.logger.verbose?.(
+            `Room '${roomId}' saved successful by '${data.socket.data.userInfo.email}'`,
+          );
         } else {
-          this.logger.error(`Saving '${roomId}' failed`);
+          data.socket.data.failedSaves++;
+          data.socket.data.canSave =
+            data.socket.data.failedSaves === this.saveConsecutiveFailedAttempts;
+          this.logger.error(
+            `Saving '${roomId}' failed for '${data.socket.data.userInfo.email}'`,
+          );
         }
       }
     })().catch((e) => {
@@ -349,18 +361,18 @@ export class Server {
   private async sendSaveMessage(
     roomId: string,
     opts: SaveMessageOpts,
-  ): Promise<boolean | undefined> {
+  ): Promise<{ saved: boolean; socket: RemoteSocketIoSocket } | undefined> {
     const { timeout } = opts;
     // get only sockets which can save
-    const sockets = (await this.fetchSocketsSafe(roomId)).filter(
-      (socket) => socket.data.update,
+    const socketsCanSave = (await this.fetchSocketsSafe(roomId)).filter(
+      canSocketSave,
     );
     // return if no eligible sockets
-    if (!sockets.length) {
+    if (!socketsCanSave.length) {
       return undefined;
     }
     // choose a random socket which can save
-    const randomSocketWithUpdateFlag = arrayRandomElement(sockets);
+    const randomSocketWithUpdateFlag = arrayRandomElement(socketsCanSave);
     // sends a save request to the socket and wait for a response
     try {
       // we are waiting for a single response, so destruct to just the first element
@@ -377,10 +389,10 @@ export class Server {
           `User '${randomSocketWithUpdateFlag.data.userInfo.email}' did not respond to '${SERVER_SAVE_REQUEST}' event after ${timeout}ms`,
         );
       }
-      return false;
+      return { saved: false, socket: randomSocketWithUpdateFlag };
     }
 
-    return true;
+    return { saved: true, socket: randomSocketWithUpdateFlag };
   }
 
   private logResponse(

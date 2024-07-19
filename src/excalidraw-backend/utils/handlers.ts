@@ -15,6 +15,9 @@ import {
 } from '../types/event.names';
 import { minCollaboratorsInRoom } from '../types/defaults';
 import { closeConnection } from './util';
+import { UserIdleState } from '../types/user.idle.state';
+import { SocketEventData } from '../types/socket.event.data';
+import { IdleStatePayload } from '../types/events/idle.state';
 
 const fetchSocketsSafe = async (
   wsServer: SocketIoServer,
@@ -55,7 +58,7 @@ export const authorizeWithRoomAndJoinHandler = async (
 
   const collaboratorsInRoom = (
     await fetchSocketsSafe(wsServer, roomID, logger)
-  ).filter((socket) => socket.data.update).length;
+  ).filter((socket) => socket.data.collaborator).length;
   const isCollaboratorLimitReached =
     collaboratorsInRoom >= maxCollaboratorsForThisRoom;
 
@@ -69,11 +72,10 @@ export const authorizeWithRoomAndJoinHandler = async (
     );
   }
 
-  socket.data.lastContributed = -1;
-  socket.data.lastPresence = -1;
   socket.data.read = canRead;
-  // the user can't update if the collator limit has been reached
-  socket.data.update = !isCollaboratorLimitReached && canUpdate;
+  // the user can't update if the collaborator limit has been reached
+  socket.data.collaborator = !isCollaboratorLimitReached && canUpdate;
+  socket.data.canSave = canUpdate;
 
   const reason = calculateReasonForCollaborationMode(
     socket,
@@ -82,7 +84,7 @@ export const authorizeWithRoomAndJoinHandler = async (
   );
 
   wsServer.to(socket.id).emit(COLLABORATOR_MODE, {
-    mode: socket.data.update ? 'write' : 'read',
+    mode: socket.data.collaborator ? 'write' : 'read',
     reason,
   });
 
@@ -154,6 +156,13 @@ export const idleStateEventHandler = (
   socket: SocketIoSocket,
 ) => {
   socket.broadcast.to(roomID).emit(IDLE_STATE, data);
+
+  const decoder = new TextDecoder('utf-8');
+  const strEventData = decoder.decode(data);
+  const eventData = JSON.parse(
+    strEventData,
+  ) as SocketEventData<IdleStatePayload>;
+  socket.data.state = eventData.payload.userState;
 };
 /* Built-in event for handling socket disconnects */
 export const disconnectingEventHandler = async (
@@ -189,7 +198,7 @@ const calculateReasonForCollaborationMode = (
     return CollaboratorModeReasons.ROOM_CAPACITY_REACHED;
   }
 
-  if (!socket.data.update && roomCapacity === minCollaboratorsInRoom) {
+  if (!socket.data.collaborator && roomCapacity === minCollaboratorsInRoom) {
     return CollaboratorModeReasons.MULTI_USER_NOT_ALLOWED;
   }
 
