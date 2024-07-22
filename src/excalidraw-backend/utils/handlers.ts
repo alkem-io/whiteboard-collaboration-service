@@ -12,12 +12,11 @@ import {
   IDLE_STATE,
   NEW_USER,
   ROOM_USER_CHANGE,
-} from '../types/event.names';
-import { minCollaboratorsInRoom } from '../types/defaults';
+} from '../types';
+import { minCollaboratorsInRoom } from '../types';
+import { SocketEventData } from '../types';
+import { IdleStatePayload } from '../types/events';
 import { closeConnection } from './util';
-import { UserIdleState } from '../types/user.idle.state';
-import { SocketEventData } from '../types/socket.event.data';
-import { IdleStatePayload } from '../types/events/idle.state';
 
 const fetchSocketsSafe = async (
   wsServer: SocketIoServer,
