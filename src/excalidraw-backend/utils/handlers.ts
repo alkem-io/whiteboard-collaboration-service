@@ -12,8 +12,10 @@ import {
   IDLE_STATE,
   NEW_USER,
   ROOM_USER_CHANGE,
-} from '../types/event.names';
-import { minCollaboratorsInRoom } from '../types/defaults';
+} from '../types';
+import { minCollaboratorsInRoom } from '../types';
+import { SocketEventData } from '../types';
+import { IdleStatePayload } from '../types/events';
 import { closeConnection } from './util';
 
 const fetchSocketsSafe = async (
@@ -55,7 +57,7 @@ export const authorizeWithRoomAndJoinHandler = async (
 
   const collaboratorsInRoom = (
     await fetchSocketsSafe(wsServer, roomID, logger)
-  ).filter((socket) => socket.data.update).length;
+  ).filter((socket) => socket.data.collaborator).length;
   const isCollaboratorLimitReached =
     collaboratorsInRoom >= maxCollaboratorsForThisRoom;
 
@@ -69,11 +71,10 @@ export const authorizeWithRoomAndJoinHandler = async (
     );
   }
 
-  socket.data.lastContributed = -1;
-  socket.data.lastPresence = -1;
-  socket.data.read = canRead;
-  // the user can't update if the collator limit has been reached
-  socket.data.update = !isCollaboratorLimitReached && canUpdate;
+  socket.data.viewer = canRead;
+  // the user can't update if the collaborator limit has been reached
+  socket.data.collaborator = !isCollaboratorLimitReached && canUpdate;
+  socket.data.canSave = canUpdate;
 
   const reason = calculateReasonForCollaborationMode(
     socket,
@@ -82,7 +83,7 @@ export const authorizeWithRoomAndJoinHandler = async (
   );
 
   wsServer.to(socket.id).emit(COLLABORATOR_MODE, {
-    mode: socket.data.update ? 'write' : 'read',
+    mode: socket.data.collaborator ? 'write' : 'read',
     reason,
   });
 
@@ -95,7 +96,7 @@ const joinRoomHandler = async (
   wsServer: SocketIoServer,
   logger: LoggerService,
 ) => {
-  if (!socket.data.read) {
+  if (!socket.data.viewer) {
     return;
   }
 
@@ -152,8 +153,23 @@ export const idleStateEventHandler = (
   roomID: string,
   data: ArrayBuffer,
   socket: SocketIoSocket,
+  logger: LoggerService,
 ) => {
   socket.broadcast.to(roomID).emit(IDLE_STATE, data);
+
+  const decoder = new TextDecoder('utf-8');
+  const strEventData = decoder.decode(data);
+  try {
+    const eventData = JSON.parse(
+      strEventData,
+    ) as SocketEventData<IdleStatePayload>;
+    socket.data.state = eventData.payload.userState;
+  } catch (e) {
+    logger.error({
+      message: e?.message ?? JSON.stringify(e),
+      data: strEventData,
+    });
+  }
 };
 /* Built-in event for handling socket disconnects */
 export const disconnectingEventHandler = async (
@@ -189,7 +205,7 @@ const calculateReasonForCollaborationMode = (
     return CollaboratorModeReasons.ROOM_CAPACITY_REACHED;
   }
 
-  if (!socket.data.update && roomCapacity === minCollaboratorsInRoom) {
+  if (!socket.data.collaborator && roomCapacity === minCollaboratorsInRoom) {
     return CollaboratorModeReasons.MULTI_USER_NOT_ALLOWED;
   }
 
