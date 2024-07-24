@@ -15,6 +15,7 @@ import {
   CONNECTION,
   defaultCollaboratorInactivity,
   defaultContributionInterval,
+  defaultSaveConsecutiveFailedAttempts,
   defaultSaveInterval,
   defaultSaveTimeout,
   DISCONNECT,
@@ -105,7 +106,8 @@ export class Server {
 
     this.saveIntervalMs = (save_interval ?? defaultSaveInterval) * 1000;
     this.saveTimeoutMs = (save_timeout ?? defaultSaveTimeout) * 1000;
-    this.saveConsecutiveFailedAttempts = save_consecutive_failed_attempts;
+    this.saveConsecutiveFailedAttempts =
+      save_consecutive_failed_attempts ?? defaultSaveConsecutiveFailedAttempts;
   }
 
   private async fetchSocketsSafe(roomID: string) {
@@ -232,7 +234,7 @@ export class Server {
           });
         }
         this.logger.verbose?.(
-          `User '${socket.data.userInfo.email}' read=${socket.data.read}, update=${socket.data.collaborator}`,
+          `User '${socket.data.userInfo.email}' read=${socket.data.viewer}, update=${socket.data.collaborator}`,
         );
       });
 
@@ -331,7 +333,7 @@ export class Server {
         } else {
           data.socket.data.failedSaves++;
           data.socket.data.canSave =
-            data.socket.data.failedSaves === this.saveConsecutiveFailedAttempts;
+            data.socket.data.failedSaves < this.saveConsecutiveFailedAttempts;
           this.logger.error(
             `Saving '${roomId}' failed for '${data.socket.data.userInfo.email}'`,
           );

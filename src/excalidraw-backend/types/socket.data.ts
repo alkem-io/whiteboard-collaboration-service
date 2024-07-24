@@ -22,9 +22,9 @@ export type SocketData = {
   /***
    * True if the user can read the content and see the interactions of others users
    */
-  read: boolean;
+  viewer: boolean;
   /***
-   * If the user can update the content of the whiteboard
+   * If the user can update the content of the whiteboard and be an active participant in the room, rather than just a viewer
    */
   collaborator: boolean;
   /***

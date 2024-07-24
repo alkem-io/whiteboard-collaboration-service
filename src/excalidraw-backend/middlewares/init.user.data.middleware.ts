@@ -10,7 +10,7 @@ export const initUserDataMiddleware: SimpleMiddlewareHandler = (
   socket.data.lastContributed = -1;
   socket.data.lastPresence = -1;
 
-  socket.data.read = false;
+  socket.data.viewer = false;
   socket.data.collaborator = false;
 
   socket.data.state = UserIdleState.ACTIVE;

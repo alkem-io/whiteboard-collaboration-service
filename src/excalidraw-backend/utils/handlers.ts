@@ -71,7 +71,7 @@ export const authorizeWithRoomAndJoinHandler = async (
     );
   }
 
-  socket.data.read = canRead;
+  socket.data.viewer = canRead;
   // the user can't update if the collaborator limit has been reached
   socket.data.collaborator = !isCollaboratorLimitReached && canUpdate;
   socket.data.canSave = canUpdate;
@@ -96,7 +96,7 @@ const joinRoomHandler = async (
   wsServer: SocketIoServer,
   logger: LoggerService,
 ) => {
-  if (!socket.data.read) {
+  if (!socket.data.viewer) {
     return;
   }
 
