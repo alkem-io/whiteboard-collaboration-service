@@ -247,7 +247,7 @@ export class Server {
       );
 
       socket.on(IDLE_STATE, (roomID: string, data: ArrayBuffer) =>
-        idleStateEventHandler(roomID, data, socket),
+        idleStateEventHandler(roomID, data, socket, this.logger),
       );
 
       socket.on(

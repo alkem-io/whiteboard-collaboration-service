@@ -153,15 +153,23 @@ export const idleStateEventHandler = (
   roomID: string,
   data: ArrayBuffer,
   socket: SocketIoSocket,
+  logger: LoggerService,
 ) => {
   socket.broadcast.to(roomID).emit(IDLE_STATE, data);
 
   const decoder = new TextDecoder('utf-8');
   const strEventData = decoder.decode(data);
-  const eventData = JSON.parse(
-    strEventData,
-  ) as SocketEventData<IdleStatePayload>;
-  socket.data.state = eventData.payload.userState;
+  try {
+    const eventData = JSON.parse(
+      strEventData,
+    ) as SocketEventData<IdleStatePayload>;
+    socket.data.state = eventData.payload.userState;
+  } catch (e) {
+    logger.error({
+      message: e?.message ?? JSON.stringify(e),
+      data: strEventData,
+    });
+  }
 };
 /* Built-in event for handling socket disconnects */
 export const disconnectingEventHandler = async (
