@@ -327,13 +327,15 @@ export class Server {
             `No eligible sockets found to save '${roomId}'`,
           );
         } else if (data.saved) {
+          data.socket.data.consecutiveFailedSaves = 0;
           this.logger.verbose?.(
             `Room '${roomId}' saved successful by '${data.socket.data.userInfo.email}'`,
           );
         } else {
-          data.socket.data.failedSaves++;
+          data.socket.data.consecutiveFailedSaves++;
           data.socket.data.canSave =
-            data.socket.data.failedSaves < this.saveConsecutiveFailedAttempts;
+            data.socket.data.consecutiveFailedSaves <
+            this.saveConsecutiveFailedAttempts;
           this.logger.error(
             `Saving '${roomId}' failed for '${data.socket.data.userInfo.email}'`,
           );

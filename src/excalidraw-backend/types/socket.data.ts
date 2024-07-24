@@ -32,9 +32,9 @@ export type SocketData = {
    */
   session?: Session;
   /**
-   * Amount of times this socket has failed saving
+   * Amount of consecutive times this socket has failed saving
    */
-  failedSaves: number;
+  consecutiveFailedSaves: number;
   /**
    * Can the socket save the whiteboard.</br>
    * This is individual of the <i>collaborator</i> flag.</br> A socket can still save without being a collaborator.
