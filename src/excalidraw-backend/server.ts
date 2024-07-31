@@ -110,13 +110,45 @@ export class Server {
       save_consecutive_failed_attempts ?? defaultSaveConsecutiveFailedAttempts;
   }
 
-  private async fetchSocketsSafe(roomID: string) {
+  async fetchSocketsSafe(roomID: string) {
     try {
       return await this.wsServer.in(roomID).fetchSockets();
     } catch (e: any) {
       this.logger.warn(`fetchSockets error handled: ${e?.message}`);
       return [];
     }
+  }
+
+  async listRooms(): Promise<{ id: string }[]> {
+    const adapter = this.wsServer.of('/').adapter;
+    return Array.from(adapter.rooms.entries())
+      .filter(([key]) => isRoomId(key))
+      .map(([key]) => ({
+        id: key,
+      }));
+  }
+
+  /**
+   * Passing { disconnect: true } forces all related sockets to disconnect (as opposed to just leaving the room)
+   * unless they are connected to other rooms, thus allowing the client to reconnect.
+   */
+  async destroyRoom(
+    roomID: string,
+    { disconnect = true }: { disconnect?: boolean } = {},
+  ): Promise<{ id: string }> {
+    const sockets = await this.fetchSocketsSafe(roomID);
+    for (const socket of sockets) {
+      socket.leave(roomID);
+    }
+    if (disconnect) {
+      for (const socket of sockets) {
+        const isConnectedToSomeRooms = Array.from(socket.rooms).some(isRoomId);
+        if (!isConnectedToSomeRooms) {
+          socket.disconnect(true);
+        }
+      }
+    }
+    return { id: roomID };
   }
 
   private adapterInit() {

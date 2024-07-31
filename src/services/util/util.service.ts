@@ -17,7 +17,7 @@ export class UtilService {
   public async getUserInfo(opts: {
     cookie?: string;
     authorization?: string;
-  }): Promise<UserInfo | never> {
+  }): Promise<UserInfo> {
     const { cookie, authorization } = opts;
 
     if (authorization) {
