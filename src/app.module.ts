@@ -4,8 +4,10 @@ import { ConfigModule } from '@nestjs/config';
 import { WinstonConfigService } from './config/winston.config';
 import { ServerModule } from './excalidraw-backend/server.module';
 import configuration from './config/configuration';
-import { HealthController } from './services/health/health.controller';
 import { HealthModule } from './services/health/health.module';
+import { GraphQLModule } from '@nestjs/graphql';
+import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
+import { RoomModule } from './api/room/room.module';
 
 @Module({
   imports: [
@@ -19,6 +21,11 @@ import { HealthModule } from './services/health/health.module';
     WinstonModule.forRootAsync({
       useClass: WinstonConfigService,
     }),
+    GraphQLModule.forRoot<ApolloDriverConfig>({
+      driver: ApolloDriver,
+      autoSchemaFile: true,
+    }),
+    RoomModule,
   ],
 })
 export class AppModule {
