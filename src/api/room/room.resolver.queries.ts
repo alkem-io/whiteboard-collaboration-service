@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Args, Query } from '@nestjs/graphql';
-import { Room } from './room.interface';
+import { Room } from './room.entity';
 import { Server } from '../../excalidraw-backend/server';
 
 @Injectable()

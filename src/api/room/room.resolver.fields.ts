@@ -1,14 +1,14 @@
 import { Parent, ResolveField, Resolver } from '@nestjs/graphql';
-import { Room } from './room.interface';
+import { Room } from './room.entity';
 import { Peer } from './peer.entity';
 import { Server } from '../../excalidraw-backend/server';
-import { UtilService } from '../../services/util/util.service';
+import { ContributionTrackingService } from '../../excalidraw-backend/contribution.tracking.service';
 
 @Resolver(() => Room)
 export class RoomResolverFields {
   constructor(
     private readonly excalidrawServer: Server,
-    private readonly utilService: UtilService,
+    private readonly contributionTrackingService: ContributionTrackingService,
   ) {}
 
   @ResolveField('peers', () => [Peer], {
@@ -17,11 +17,21 @@ export class RoomResolverFields {
   })
   async peers(@Parent() room: Room): Promise<Peer[]> {
     const sockets = await this.excalidrawServer.fetchSocketsSafe(room.id);
-    const usersInfo = await Promise.all(
-      sockets.map((socket) =>
-        this.utilService.getUserInfo(socket.handshake.headers),
-      ),
+    return sockets.map((socket) => ({
+      id: socket.id,
+      userID: socket.data.userInfo.id,
+      email: socket.data.userInfo.email,
+      roomID: room.id,
+    }));
+  }
+
+  @ResolveField('lastContributedToAt', () => Date, {
+    nullable: true,
+    description: 'The date of the last contribution to this Room.',
+  })
+  async lastContributedToAt(@Parent() room: Room): Promise<Date | null> {
+    return await this.contributionTrackingService.getLatestContributionTime(
+      room.id,
     );
-    return usersInfo;
   }
 }

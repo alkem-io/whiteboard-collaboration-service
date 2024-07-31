@@ -4,7 +4,4 @@ import { Field, ObjectType } from '@nestjs/graphql';
 export class Room {
   @Field(() => String)
   id!: string;
-
-  @Field(() => Date)
-  lastActivity?: Date;
 }

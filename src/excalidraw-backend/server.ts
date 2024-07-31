@@ -7,7 +7,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { debounce } from 'lodash';
+import { debounce, uniqBy } from 'lodash';
 import {
   CLIENT_BROADCAST,
   COLLABORATOR_MODE,
@@ -55,6 +55,12 @@ import { CREATE_ROOM, DELETE_ROOM } from './adapters/adapter.event.names';
 import { APP_ID } from '../app.id';
 import { arrayRandomElement, isAbortError } from '../util';
 import { ConfigType } from '../config';
+import { ContributionTrackingService } from './contribution.tracking.service';
+
+interface RoomContributionTracker {
+  lastTrackWindowEnd: number;
+  controller: AbortController;
+}
 
 type SaveMessageOpts = { timeout: number };
 type RoomTrackers = Map<string, AbortController>;
@@ -64,7 +70,10 @@ type SocketTrackers = Map<string, AbortController>;
 export class Server {
   private readonly wsServer: SocketIoServer;
 
-  private readonly contributionTrackers: RoomTrackers = new Map();
+  private readonly contributionTrackers = new Map<
+    string,
+    RoomContributionTracker
+  >();
   private readonly autoSaveTrackers: RoomTrackers = new Map();
   private readonly collaboratorInactivityTrackers: SocketTrackers = new Map();
 
@@ -78,6 +87,7 @@ export class Server {
     @Inject(WINSTON_MODULE_NEST_PROVIDER) private logger: LoggerService,
     private readonly utilService: UtilService,
     private readonly configService: ConfigService<ConfigType, true>,
+    private readonly contributionTrackingService: ContributionTrackingService,
   ) {
     const port = this.configService.get('settings.collaboration.port', {
       infer: true,
@@ -160,7 +170,7 @@ export class Server {
 
       if ((await this.fetchSocketsSafe(roomId)).length > 0) {
         // if there are sockets already connected
-        // this room already exist on another instance
+        // this room is already handled on another instance
         return;
       }
       this.logger.verbose?.(`Room '${roomId}' created on instance '${APP_ID}'`);
@@ -256,6 +266,14 @@ export class Server {
           this.startCollaboratorInactivityTrackerForSocket(socket);
           // user can broadcast content change events
           socket.on(SERVER_BROADCAST, (roomID: string, data: ArrayBuffer) => {
+            this.contributionTrackingService.trackContribution(
+              roomID,
+              socket.id,
+              {
+                userID: socket.data.userInfo.id,
+                email: socket.data.userInfo.email,
+              },
+            );
             serverBroadcastEventHandler(roomID, data, socket, (roomId) =>
               this.utilService.contentModified(socket.data.userInfo.id, roomId),
             );
@@ -294,53 +312,78 @@ export class Server {
     });
   }
 
-  private startContributionTrackerForRoom(roomId: string) {
+  private startContributionTrackerForRoom(
+    roomId: string,
+  ): RoomContributionTracker {
     const ac = new AbortController();
 
     (async () => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      for await (const _ of setInterval(this.contributionWindowMs, null, {
-        signal: ac.signal,
-      })) {
-        await this.gatherContributions(roomId);
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        for await (const _ of setInterval(this.contributionWindowMs, null, {
+          signal: ac.signal,
+        })) {
+          await this.trackRecentContributionsWithinRoom(roomId);
+        }
+      } catch (e) {
+        if (isAbortError(e)) {
+          this.logger.verbose?.(
+            `Contribution tracker for room '${roomId}' was aborted with reason '${e.cause}'`,
+          );
+        } else {
+          this.logger.error?.(
+            `Contribution tracker for room '${roomId}' failed: ${e.message}`,
+          );
+        }
       }
-    })().catch((e) => {
-      if (isAbortError(e)) {
-        this.logger.verbose?.(
-          `Contribution tracker for room '${roomId}' was aborted with reason '${e.cause}'`,
-        );
-      } else {
-        this.logger.error?.(
-          `Contribution tracker for room '${roomId}' failed: ${e.message}`,
-        );
-      }
-    });
+    })();
 
-    return ac;
+    return {
+      lastTrackWindowEnd: Date.now(),
+      controller: ac,
+    };
   }
 
-  private async gatherContributions(roomId: string) {
+  private async trackRecentContributionsWithinRoom(roomId: string) {
+    if (!this.contributionTrackers.has(roomId)) {
+      this.logger.verbose?.(
+        `No contribution tracker registered for room '${roomId}', skipping`,
+      );
+      return;
+    }
+
     const windowEnd = Date.now();
-    const windowStart = windowEnd - this.contributionWindowMs;
 
-    const sockets = await this.fetchSocketsSafe(roomId);
+    // Relying on (Date.now() + window) will skip contributions occurred between (last interval trigger + window) and Date.now() at time of actual current trigger.
+    // It can happen because setInterval guarantees execution AFTER the given interval, but not EXACTLY after.
+    const windowStart =
+      this.contributionTrackers.get(roomId)!.lastTrackWindowEnd;
 
-    const users = sockets
-      .map((socket) => {
-        const lastContributed = socket.data.lastContributed;
-        if (lastContributed >= windowStart && windowEnd >= lastContributed) {
-          return {
-            id: socket.data.userInfo.id,
-            email: socket.data.userInfo.email,
-          };
-        }
-      })
-      .filter((item): item is { id: string; email: string } => !!item);
+    const contributions =
+      await this.contributionTrackingService.getContributions(roomId);
+
+    const recentContributions = contributions.filter(
+      (contribution) =>
+        contribution.createdAt.getTime() >= windowStart &&
+        windowEnd >= contribution.createdAt.getTime(),
+    );
+
+    const users = recentContributions.map((contribution) => {
+      return {
+        id: contribution.userID,
+        email: contribution.email,
+      };
+    });
+
+    const uniqueUsers = uniqBy(users, 'id');
 
     this.logger.verbose?.(
-      `Registering contributions for ${users.length} users in room '${roomId}'`,
+      `Registering contributions for ${uniqueUsers.length} users in room '${roomId}'`,
     );
-    return this.utilService.contribution(roomId, users);
+
+    this.contributionTrackers.get(roomId)!.lastTrackWindowEnd = windowEnd;
+
+    return this.utilService.contribution(roomId, uniqueUsers);
   }
 
   private startAutoSaveTrackerForRoom(roomId: string) {
@@ -463,10 +506,19 @@ export class Server {
     });
   }
 
-  private deleteTrackersForRoom(roomId: string) {
-    const contributionAC = this.contributionTrackers.get(roomId);
-    if (contributionAC) {
-      contributionAC.abort('deleted');
+  private async deleteTrackersForRoom(roomId: string) {
+    const contributionTracker = this.contributionTrackers.get(roomId);
+
+    try {
+      await this.contributionTrackingService.deleteRoom(roomId);
+    } catch (e) {
+      this.logger.error?.(
+        `Failed to cleanup contributions in Redis for room '${roomId}': ${e.message}`,
+      );
+    }
+
+    if (contributionTracker) {
+      contributionTracker.controller.abort('deleted');
       this.contributionTrackers.delete(roomId);
       this.logger.verbose?.(
         `Deleted contribution tracker for room '${roomId}'`,
@@ -482,39 +534,38 @@ export class Server {
   }
 
   private createCollaboratorInactivityTracker(socket: SocketIoSocket) {
-    const cb = () => {
-      this.logger.verbose?.(
-        `User '${socket.data.userInfo.email}' was inactive ${this.collaboratorInactivityMs / 1000} seconds, setting collaborator mode to 'read' for user '${socket.data.userInfo.email}'`,
-      );
-      // User is inactive, setting collaborator mode to 'read'
-      // todo move emit, removeAllListeners, socket.data
-      this.wsServer.to(socket.id).emit(COLLABORATOR_MODE, {
-        mode: 'read',
-        reason: CollaboratorModeReasons.INACTIVITY,
-      });
-      socket.removeAllListeners(SERVER_BROADCAST);
-      // if there are no sockets with update we can't save if there is something not saved
-      // socket.data.update = false;
-      this.collaboratorInactivityTrackers.delete(socket.id);
-    };
-
     const ac = new AbortController();
+
     (async () => {
-      await setTimeout(this.collaboratorInactivityMs, null, {
-        signal: ac.signal,
-      });
-      cb();
-    })().catch((e) => {
-      if (isAbortError(e)) {
+      try {
+        await setTimeout(this.collaboratorInactivityMs, null, {
+          signal: ac.signal,
+        });
         this.logger.verbose?.(
-          `Collaborator inactivity tracker for user '${socket.data.userInfo.email}' was aborted with reason '${e.cause}'`,
+          `User '${socket.data.userInfo.email}' was inactive ${this.collaboratorInactivityMs / 1000} seconds, setting collaborator mode to 'read' for user '${socket.data.userInfo.email}'`,
         );
-      } else {
-        this.logger.error?.(
-          `Collaborator inactivity tracker for user '${socket.data.userInfo.email}' failed: ${e.message}`,
-        );
+        // User is inactive, setting collaborator mode to 'read'
+        // todo move emit, removeAllListeners, socket.data
+        this.wsServer.to(socket.id).emit(COLLABORATOR_MODE, {
+          mode: 'read',
+          reason: CollaboratorModeReasons.INACTIVITY,
+        });
+        socket.removeAllListeners(SERVER_BROADCAST);
+        // if there are no sockets with update we can't save if there is something not saved
+        // socket.data.update = false;
+        this.collaboratorInactivityTrackers.delete(socket.id);
+      } catch (e) {
+        if (isAbortError(e)) {
+          this.logger.verbose?.(
+            `Collaborator inactivity tracker for user '${socket.data.userInfo.email}' was aborted with reason '${e.cause}'`,
+          );
+        } else {
+          this.logger.error?.(
+            `Collaborator inactivity tracker for user '${socket.data.userInfo.email}' failed: ${e.message}`,
+          );
+        }
       }
-    });
+    })();
 
     return ac;
   }
