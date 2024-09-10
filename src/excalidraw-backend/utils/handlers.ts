@@ -15,8 +15,9 @@ import {
 } from '../types';
 import { minCollaboratorsInRoom } from '../types';
 import { SocketEventData } from '../types';
-import { IdleStatePayload } from '../types/events';
+import { IdleStatePayload, ServerBroadcastPayload } from '../types/events';
 import { closeConnection } from './util';
+import { tryDecodeBinary, tryDecodeIncoming } from './decode.incoming';
 
 const fetchSocketsSafe = async (
   wsServer: SocketIoServer,
@@ -157,17 +158,13 @@ export const idleStateEventHandler = (
 ) => {
   socket.broadcast.to(roomID).emit(IDLE_STATE, data);
 
-  const decoder = new TextDecoder('utf-8');
-  const strEventData = decoder.decode(data);
   try {
-    const eventData = JSON.parse(
-      strEventData,
-    ) as SocketEventData<IdleStatePayload>;
+    const eventData = tryDecodeIncoming<IdleStatePayload>(data);
     socket.data.state = eventData.payload.userState;
   } catch (e) {
     logger.error({
       message: e?.message ?? JSON.stringify(e),
-      data: strEventData,
+      data: e instanceof SyntaxError ? tryDecodeBinary(data) : undefined,
     });
   }
 };

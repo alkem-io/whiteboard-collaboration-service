@@ -1,4 +1,4 @@
-export * from './client.broadcast.payload.type';
+export * from './broadcast.payload.type';
 export * from './collaboration.mode.reasons';
 
 export * from './defaults';
@@ -14,3 +14,5 @@ export * from './socket.io.socket';
 
 export * from './user.info.for.room';
 export * from './user.idle.state';
+
+export * from './excalidraw.element';

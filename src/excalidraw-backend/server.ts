@@ -20,6 +20,7 @@ import {
   defaultSaveTimeout,
   DISCONNECT,
   DISCONNECTING,
+  ExcalidrawElement,
   IDLE_STATE,
   INIT_ROOM,
   JOIN_ROOM,
@@ -31,6 +32,7 @@ import {
   SERVER_SAVE_REQUEST,
   SERVER_SIDE_ROOM_DELETED,
   SERVER_VOLATILE_BROADCAST,
+  SocketEventData,
   SocketIoServer,
   SocketIoSocket,
 } from './types';
@@ -55,10 +57,18 @@ import { CREATE_ROOM, DELETE_ROOM } from './adapters/adapter.event.names';
 import { APP_ID } from '../app.id';
 import { arrayRandomElement, isAbortError } from '../util';
 import { ConfigType } from '../config';
+import { tryDecodeIncoming } from './utils/decode.incoming';
+import { ServerBroadcastPayload } from './types/events';
+import { reconcileElements } from './utils/reconcile';
+import { detectChanges } from './utils/detect.changes';
 
 type SaveMessageOpts = { timeout: number };
 type RoomTrackers = Map<string, AbortController>;
 type SocketTrackers = Map<string, AbortController>;
+
+type MasterSnapshot = {
+  elements: ExcalidrawElement[];
+} & Record<string, unknown>;
 
 @Injectable()
 export class Server {
@@ -73,6 +83,8 @@ export class Server {
   private readonly saveTimeoutMs: number;
   private readonly saveConsecutiveFailedAttempts: number;
   private readonly collaboratorInactivityMs: number;
+
+  private snapshots: Map<string, MasterSnapshot> = new Map();
 
   constructor(
     @Inject(WINSTON_MODULE_NEST_PROVIDER) private logger: LoggerService,
@@ -210,6 +222,9 @@ export class Server {
       });
 
       socket.on(JOIN_ROOM, async (roomID) => {
+        if (!this.snapshots.has(roomID)) {
+          this.snapshots.set(roomID, { elements: [] });
+        }
         // this logic could be provided by an entitlement (license) service
         await authorizeWithRoomAndJoinHandler(
           roomID,
@@ -228,6 +243,44 @@ export class Server {
               this.utilService.contentModified(socket.data.userInfo.id, roomId),
             );
             this.resetCollaboratorInactivityTrackerForSocket(socket);
+            let eventData: SocketEventData<ServerBroadcastPayload> | undefined;
+            try {
+              eventData = tryDecodeIncoming<ServerBroadcastPayload>(data);
+            } catch (e) {
+              this.logger.error({
+                message: e?.message ?? JSON.stringify(e),
+              });
+            }
+
+            if (!eventData) {
+              return;
+            }
+
+            const snapshot = this.snapshots.get(roomID);
+
+            if (!snapshot) {
+              return;
+            }
+
+            if (eventData.type === 'sync-check') {
+              console.log(
+                'sync-check',
+                JSON.stringify(
+                  detectChanges(snapshot.elements, eventData.payload.elements),
+                  null,
+                  2,
+                ),
+              );
+            }
+
+            const a = reconcileElements(
+              snapshot.elements,
+              eventData.payload.elements,
+            );
+            // console.log(
+            //   JSON.stringify(detectChanges(snapshot.elements, a), null, 2),
+            // );
+            snapshot.elements = a;
           });
           socket.on(SCENE_INIT, (roomID: string, data: ArrayBuffer) => {
             socket.broadcast.to(roomID).emit(CLIENT_BROADCAST, data);
