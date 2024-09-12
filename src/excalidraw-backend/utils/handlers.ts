@@ -113,7 +113,7 @@ const joinRoomHandler = async (
     wsServer.to(socket.id).emit(FIRST_IN_ROOM);
   } else {
     logger?.verbose?.(`User '${userInfo.email}' emitted to room '${roomID}'`);
-    socket.broadcast.to(roomID).emit(NEW_USER, socket.id);
+    // socket.broadcast.to(roomID).emit(NEW_USER, socket.id);
   }
 
   const socketIDs = sockets.map((socket) => socket.id);
@@ -123,7 +123,7 @@ const joinRoomHandler = async (
 Built-in event for handling broadcast;
 messages are sent to all sockets except the sender socket in reliable manner
  */
-export const serverBroadcastEventHandler = async (
+export const serverBroadcastEventHandler = (
   roomID: string,
   data: ArrayBuffer,
   socket: SocketIoSocket,

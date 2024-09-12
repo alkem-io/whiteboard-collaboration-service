@@ -3,6 +3,7 @@ import { WhiteboardIntegrationAdapterService } from './whiteboard.integration.ad
 import {
   ContentModifiedInputData,
   ContributionInputData,
+  FetchInputData,
   InfoInputData,
   SaveInputData,
   WhoInputData,
@@ -36,5 +37,9 @@ export class WhiteboardIntegrationService {
 
   public save(data: SaveInputData) {
     return this.integrationAdapter.save(data);
+  }
+
+  public fetch(data: FetchInputData) {
+    return this.integrationAdapter.fetch(data);
   }
 }

@@ -24,6 +24,7 @@ export interface ConfigType {
       enabled: boolean;
       port: number;
       contribution_window: number;
+      // todo: cleanup
       save_interval: number;
       save_timeout: number;
       save_consecutive_failed_attempts: number;

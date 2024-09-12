@@ -9,6 +9,7 @@ import {
   INIT_ROOM,
   ROOM_USER_CHANGE,
   SAVED,
+  SCENE_INIT,
   SERVER_BROADCAST,
   SERVER_SAVE_REQUEST,
   SERVER_SIDE_ROOM_DELETED,
@@ -29,6 +30,7 @@ type EmitEvents = {
   [INIT_ROOM]: () => void;
   [CLIENT_BROADCAST]: (data: ArrayBuffer) => void;
   [ROOM_USER_CHANGE]: (socketIDs: Array<string>) => void;
+  [SCENE_INIT]: (scene: ArrayBuffer) => void;
   [SAVED]: () => void;
   [FIRST_IN_ROOM]: () => void;
   [COLLABORATOR_MODE]: (data: {

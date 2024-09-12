@@ -11,13 +11,17 @@ import { WhiteboardIntegrationMessagePattern } from './message.pattern.enum';
 import {
   ContentModifiedInputData,
   ContributionInputData,
+  FetchInputData,
   InfoInputData,
   SaveInputData,
   WhoInputData,
 } from './inputs';
 import {
+  FetchErrorData,
+  FetchOutputData,
   HealthCheckOutputData,
   InfoOutputData,
+  SaveErrorData,
   SaveOutputData,
 } from './outputs';
 import { WhiteboardIntegrationEventPattern } from './event.pattern.enum';
@@ -102,7 +106,7 @@ export class WhiteboardIntegrationAdapterService {
         data,
       );
     } catch (e) {
-      // ... do nothing
+      this.logger.error(e, e?.stack);
     }
   }
 
@@ -113,7 +117,7 @@ export class WhiteboardIntegrationAdapterService {
         data,
       );
     } catch (e) {
-      // ... do nothing
+      this.logger.error(e, e?.stack);
     }
   }
 
@@ -124,7 +128,22 @@ export class WhiteboardIntegrationAdapterService {
         data,
       );
     } catch (e) {
-      return new SaveOutputData(false, e?.message);
+      return new SaveOutputData(
+        new SaveErrorData(e?.message ?? JSON.stringify(e)),
+      );
+    }
+  }
+
+  public async fetch(data: FetchInputData) {
+    try {
+      return this.sendWithResponse<FetchOutputData, FetchInputData>(
+        WhiteboardIntegrationMessagePattern.FETCH,
+        data,
+      );
+    } catch (e) {
+      return new FetchOutputData(
+        new FetchErrorData(e?.message ?? JSON.stringify(e)),
+      );
     }
   }
 

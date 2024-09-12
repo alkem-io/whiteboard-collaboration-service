@@ -1,5 +1,5 @@
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
-import { setTimeout, setInterval } from 'node:timers/promises';
+import { setInterval, setTimeout } from 'node:timers/promises';
 import {
   Inject,
   Injectable,
@@ -9,7 +9,6 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { debounce } from 'lodash';
 import {
-  CLIENT_BROADCAST,
   COLLABORATOR_MODE,
   CollaboratorModeReasons,
   CONNECTION,
@@ -55,27 +54,18 @@ import {
 } from './utils';
 import { CREATE_ROOM, DELETE_ROOM } from './adapters/adapter.event.names';
 import { APP_ID } from '../app.id';
-import { arrayRandomElement, isAbortError } from '../util';
+import { arrayRandomElement, isAbortError, jsonToArrayBuffer } from '../util';
 import { ConfigType } from '../config';
 import { tryDecodeIncoming } from './utils/decode.incoming';
 import { ServerBroadcastPayload } from './types/events';
 import { reconcileElements } from './utils/reconcile';
 import { detectChanges } from './utils/detect.changes';
 import { reconcileFiles } from './utils/reconcile.files';
+import { isSaveErrorData } from '../services/whiteboard-integration/outputs';
 
 type SaveMessageOpts = { timeout: number };
 type RoomTrackers = Map<string, AbortController>;
 type SocketTrackers = Map<string, AbortController>;
-
-// todo: load from database
-const initContent: ExcalidrawContent = {
-  appState: undefined,
-  source: '',
-  type: 'excalidraw',
-  version: 1,
-  elements: [],
-  files: {},
-};
 
 @Injectable()
 export class Server {
@@ -166,8 +156,8 @@ export class Server {
         this.logger.verbose?.(
           `Starting auto save tracker for room '${roomId}'`,
         );
-        const ac = this.startAutoSaveTrackerForRoom(roomId);
-        this.autoSaveTrackers.set(roomId, ac);
+        // const ac = this.startAutoSaveTrackerForRoom(roomId);
+        // this.autoSaveTrackers.set(roomId, ac);
       }
     });
     adapter.on(DELETE_ROOM, async (roomId: string) => {
@@ -195,6 +185,10 @@ export class Server {
       );
       // delete trackers that were left locally
       this.deleteTrackersForRoom(roomId);
+
+      await this.saveRoom(roomId);
+      // todo: should we keep it cached?
+      this.snapshots.delete(roomId);
     });
     adapter.on('error', (error: Error) => {
       this.logger.error(error, error.stack);
@@ -229,8 +223,9 @@ export class Server {
       });
 
       socket.on(JOIN_ROOM, async (roomID) => {
+        const content = await this.getRoomContent(roomID);
         if (!this.snapshots.has(roomID)) {
-          this.snapshots.set(roomID, initContent);
+          this.snapshots.set(roomID, content);
         }
         // this logic could be provided by an entitlement (license) service
         await authorizeWithRoomAndJoinHandler(
@@ -241,6 +236,7 @@ export class Server {
           (roomId, userId) =>
             this.utilService.getUserInfoForRoom(userId, roomId),
         );
+        await this.initSceneForSocket(socket, roomID);
 
         if (socket.data.collaborator) {
           this.startCollaboratorInactivityTrackerForSocket(socket);
@@ -290,28 +286,19 @@ export class Server {
                 );
               }
 
-              const newElements = reconcileElements(
+              snapshot.elements = reconcileElements(
                 snapshot.elements,
                 eventData.payload.elements,
               );
-              // console.log(
-              //   JSON.stringify(detectChanges(snapshot.elements, a), null, 2),
-              // );
-              snapshot.elements = newElements;
-
-              const newFiles = reconcileFiles(
+              snapshot.files = reconcileFiles(
                 snapshot.elements,
                 snapshot.files,
                 eventData.payload.files,
               );
-              snapshot.files = newFiles;
               //
-              this.throttledSave(roomID, snapshot);
+              this.debouncedSave(roomID);
             },
           );
-          socket.on(SCENE_INIT, (roomID: string, data: ArrayBuffer) => {
-            socket.broadcast.to(roomID).emit(CLIENT_BROADCAST, data);
-          });
         }
         this.logger.verbose?.(
           `User '${socket.data.userInfo.email}' read=${socket.data.viewer}, update=${socket.data.collaborator}`,
@@ -620,14 +607,47 @@ export class Server {
     { leading: true, trailing: false },
   );
 
-  private throttledSave = debounce(
-    async (roomId: string, content: ExcalidrawContent) => {
-      const response = await this.utilService.save(roomId, content);
-      console.log(response);
-    },
+  public async initSceneForSocket(socket: SocketIoSocket, roomId: string) {
+    // await setTimeout(1000, null);
+    const content = await this.getRoomContent(roomId);
+    const data = jsonToArrayBuffer({
+      type: SCENE_INIT,
+      payload: content,
+    });
+    this.wsServer.to(socket.id).emit(SCENE_INIT, data);
+    this.logger.verbose?.(`Scene init sent to '${socket.data.userInfo.email}'`);
+  }
+
+  /**
+   * Called once after X milliseconds of the last received save request
+   * @private
+   */
+  private debouncedSave = debounce(
+    (roomId: string) => this.saveRoom(roomId),
     3000,
-    { leading: true, trailing: false },
+    { leading: false, trailing: true },
   );
+
+  private async getRoomContent(roomId: string) {
+    return this.snapshots.get(roomId) ?? (await this.utilService.fetch(roomId));
+  }
+
+  private async saveRoom(roomId: string) {
+    const content = this.snapshots.get(roomId);
+    if (!content) {
+      this.logger.error(
+        `No content found for room '${roomId}' in the local storage!`,
+      );
+      return;
+    }
+
+    const { data } = await this.utilService.save(roomId, content);
+    if (isSaveErrorData(data)) {
+      this.logger.error(`Failed to save room '${roomId}': ${data.error}`);
+    } else {
+      this.logger.verbose?.(`Room '${roomId}' saved successfully`);
+    }
+  }
 }
 // not that reliable, but best we can do
 const isRoomId = (id: string) => id.length === 36;
