@@ -9,12 +9,17 @@ import {
 import { UserInfo } from './user.info';
 import { WhiteboardIntegrationMessagePattern } from './message.pattern.enum';
 import {
-  WhoInputData,
   ContentModifiedInputData,
   ContributionInputData,
   InfoInputData,
+  SaveInputData,
+  WhoInputData,
 } from './inputs';
-import { HealthCheckOutputData, InfoOutputData } from './outputs';
+import {
+  HealthCheckOutputData,
+  InfoOutputData,
+  SaveOutputData,
+} from './outputs';
 import { WhiteboardIntegrationEventPattern } from './event.pattern.enum';
 import { ConfigService } from '@nestjs/config';
 import { ConfigType } from '../../config';
@@ -111,6 +116,18 @@ export class WhiteboardIntegrationAdapterService {
       // ... do nothing
     }
   }
+
+  public async save(data: SaveInputData) {
+    try {
+      return this.sendWithResponse<SaveOutputData, SaveInputData>(
+        WhiteboardIntegrationMessagePattern.SAVE,
+        data,
+      );
+    } catch (e) {
+      return new SaveOutputData(false, e?.message);
+    }
+  }
+
   /**
    * Is there a healthy connection to the queue
    */
@@ -157,19 +174,21 @@ export class WhiteboardIntegrationAdapterService {
       timeout({ each: timeoutMs }),
     );
 
-    return firstValueFrom(result$).catch(({ err }: RMQConnectionError) => {
-      this.logger.error(
-        {
-          message: `Error was received while waiting for response: ${err.message}`,
-          pattern,
-          data,
-          timeout: timeoutMs,
-        },
-        err.stack,
-      );
+    return firstValueFrom(result$).catch(
+      (error: RMQConnectionError | undefined) => {
+        this.logger.error(
+          {
+            message: `Error was received while waiting for response: ${error?.err.message}`,
+            pattern,
+            data,
+            timeout: timeoutMs,
+          },
+          error?.err.stack,
+        );
 
-      throw new Error('Error while processing integration request.');
-    });
+        throw new Error('Error while processing integration request.');
+      },
+    );
   };
   // todo: work on exception handling: logging here vs at consumer
   /**

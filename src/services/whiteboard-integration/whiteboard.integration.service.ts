@@ -4,6 +4,7 @@ import {
   ContentModifiedInputData,
   ContributionInputData,
   InfoInputData,
+  SaveInputData,
   WhoInputData,
 } from './inputs';
 
@@ -31,5 +32,9 @@ export class WhiteboardIntegrationService {
 
   public contribution(data: ContributionInputData) {
     return this.integrationAdapter.contribution(data);
+  }
+
+  public save(data: SaveInputData) {
+    return this.integrationAdapter.save(data);
   }
 }

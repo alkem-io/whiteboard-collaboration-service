@@ -5,8 +5,10 @@ import {
   ContentModifiedInputData,
   ContributionInputData,
   InfoInputData,
+  SaveInputData,
   WhoInputData,
 } from '../whiteboard-integration/inputs';
+import { ExcalidrawContent } from '../../excalidraw-backend/types';
 
 @Injectable()
 export class UtilService {
@@ -44,6 +46,12 @@ export class UtilService {
   public contribution(roomId: string, users: { id: string; email: string }[]) {
     return this.integrationService.contribution(
       new ContributionInputData(roomId, users),
+    );
+  }
+
+  public save(roomId: string, content: ExcalidrawContent) {
+    return this.integrationService.save(
+      new SaveInputData(roomId, JSON.stringify(content)),
     );
   }
 }

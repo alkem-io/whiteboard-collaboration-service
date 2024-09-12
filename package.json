@@ -24,6 +24,7 @@
     "@socket.io/redis-adapter": "^8.3.0",
     "amqp-connection-manager": "^4.1.14",
     "amqplib": "^0.10.4",
+    "fractional-indexing": "3.2.0",
     "http": "^0.0.1-security",
     "lodash": "^4.17.21",
     "nest-winston": "^1.9.6",

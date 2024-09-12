@@ -1,5 +1,6 @@
 import { ExcalidrawElement } from '../types';
 import { arrayToMap } from './array.to.map';
+// import { orderByFractionalIndex, syncInvalidIndices } from './fractionalIndex';
 
 const shouldDiscardRemoteElement = (
   local: ExcalidrawElement | undefined,
@@ -84,10 +85,15 @@ export const reconcileElements = (
 
   // const orderedElements = orderByFractionalIndex(reconciledElements);
 
+  /**
+   * todo: not sure how important is this and how does it affect the end result
+   * since the debounce is set to 60 seconds, which might mean that the room has already closed
+   * and that the whiteboard is already saved
+   */
   // validateIndicesThrottled(orderedElements, localElements, remoteElements);
 
   // de-duplicate indices
-  // syncInvalidIndices(orderedElements);
+  // const syncedElemented = syncInvalidIndices(orderedElements);
 
   // return orderedElements as ReconciledExcalidrawElement[];
   return reconciledElements;

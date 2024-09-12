@@ -3,5 +3,7 @@ import { ExcalidrawFile } from '../excalidraw.file';
 
 export type ServerBroadcastPayload = {
   elements: readonly ExcalidrawElement[];
-  files: readonly ExcalidrawFile[];
+  files: {
+    [id: string]: ExcalidrawFile;
+  };
 };

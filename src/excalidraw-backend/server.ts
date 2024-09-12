@@ -20,7 +20,7 @@ import {
   defaultSaveTimeout,
   DISCONNECT,
   DISCONNECTING,
-  ExcalidrawElement,
+  ExcalidrawContent,
   IDLE_STATE,
   INIT_ROOM,
   JOIN_ROOM,
@@ -61,14 +61,21 @@ import { tryDecodeIncoming } from './utils/decode.incoming';
 import { ServerBroadcastPayload } from './types/events';
 import { reconcileElements } from './utils/reconcile';
 import { detectChanges } from './utils/detect.changes';
+import { reconcileFiles } from './utils/reconcile.files';
 
 type SaveMessageOpts = { timeout: number };
 type RoomTrackers = Map<string, AbortController>;
 type SocketTrackers = Map<string, AbortController>;
 
-type MasterSnapshot = {
-  elements: ExcalidrawElement[];
-} & Record<string, unknown>;
+// todo: load from database
+const initContent: ExcalidrawContent = {
+  appState: undefined,
+  source: '',
+  type: 'excalidraw',
+  version: 1,
+  elements: [],
+  files: {},
+};
 
 @Injectable()
 export class Server {
@@ -84,7 +91,7 @@ export class Server {
   private readonly saveConsecutiveFailedAttempts: number;
   private readonly collaboratorInactivityMs: number;
 
-  private snapshots: Map<string, MasterSnapshot> = new Map();
+  private snapshots: Map<string, ExcalidrawContent> = new Map();
 
   constructor(
     @Inject(WINSTON_MODULE_NEST_PROVIDER) private logger: LoggerService,
@@ -223,7 +230,7 @@ export class Server {
 
       socket.on(JOIN_ROOM, async (roomID) => {
         if (!this.snapshots.has(roomID)) {
-          this.snapshots.set(roomID, { elements: [] });
+          this.snapshots.set(roomID, initContent);
         }
         // this logic could be provided by an entitlement (license) service
         await authorizeWithRoomAndJoinHandler(
@@ -238,50 +245,70 @@ export class Server {
         if (socket.data.collaborator) {
           this.startCollaboratorInactivityTrackerForSocket(socket);
           // user can broadcast content change events
-          socket.on(SERVER_BROADCAST, (roomID: string, data: ArrayBuffer) => {
-            serverBroadcastEventHandler(roomID, data, socket, (roomId) =>
-              this.utilService.contentModified(socket.data.userInfo.id, roomId),
-            );
-            this.resetCollaboratorInactivityTrackerForSocket(socket);
-            let eventData: SocketEventData<ServerBroadcastPayload> | undefined;
-            try {
-              eventData = tryDecodeIncoming<ServerBroadcastPayload>(data);
-            } catch (e) {
-              this.logger.error({
-                message: e?.message ?? JSON.stringify(e),
-              });
-            }
-
-            if (!eventData) {
-              return;
-            }
-
-            const snapshot = this.snapshots.get(roomID);
-
-            if (!snapshot) {
-              return;
-            }
-
-            if (eventData.type === 'sync-check') {
-              console.log(
-                'sync-check',
-                JSON.stringify(
-                  detectChanges(snapshot.elements, eventData.payload.elements),
-                  null,
-                  2,
+          socket.on(
+            SERVER_BROADCAST,
+            async (roomID: string, data: ArrayBuffer) => {
+              serverBroadcastEventHandler(roomID, data, socket, (roomId) =>
+                this.utilService.contentModified(
+                  socket.data.userInfo.id,
+                  roomId,
                 ),
               );
-            }
+              this.resetCollaboratorInactivityTrackerForSocket(socket);
+              let eventData:
+                | SocketEventData<ServerBroadcastPayload>
+                | undefined;
+              try {
+                eventData = tryDecodeIncoming<ServerBroadcastPayload>(data);
+              } catch (e) {
+                this.logger.error({
+                  message: e?.message ?? JSON.stringify(e),
+                });
+              }
 
-            const a = reconcileElements(
-              snapshot.elements,
-              eventData.payload.elements,
-            );
-            // console.log(
-            //   JSON.stringify(detectChanges(snapshot.elements, a), null, 2),
-            // );
-            snapshot.elements = a;
-          });
+              if (!eventData) {
+                return;
+              }
+
+              const snapshot = this.snapshots.get(roomID);
+
+              if (!snapshot) {
+                return;
+              }
+
+              if (eventData.type === 'sync-check') {
+                console.log(
+                  'sync-check',
+                  JSON.stringify(
+                    detectChanges(
+                      snapshot.elements,
+                      eventData.payload.elements,
+                    ),
+                    null,
+                    2,
+                  ),
+                );
+              }
+
+              const newElements = reconcileElements(
+                snapshot.elements,
+                eventData.payload.elements,
+              );
+              // console.log(
+              //   JSON.stringify(detectChanges(snapshot.elements, a), null, 2),
+              // );
+              snapshot.elements = newElements;
+
+              const newFiles = reconcileFiles(
+                snapshot.elements,
+                snapshot.files,
+                eventData.payload.files,
+              );
+              snapshot.files = newFiles;
+              //
+              this.throttledSave(roomID, snapshot);
+            },
+          );
           socket.on(SCENE_INIT, (roomID: string, data: ArrayBuffer) => {
             socket.broadcast.to(roomID).emit(CLIENT_BROADCAST, data);
           });
@@ -590,6 +617,15 @@ export class Server {
       }
     },
     resetCollaboratorModeDebounceWait,
+    { leading: true, trailing: false },
+  );
+
+  private throttledSave = debounce(
+    async (roomId: string, content: ExcalidrawContent) => {
+      const response = await this.utilService.save(roomId, content);
+      console.log(response);
+    },
+    3000,
     { leading: true, trailing: false },
   );
 }
