@@ -28,7 +28,6 @@ export const reconcileFiles = (
     }
     // if it's not found locally but used by a local element - add it to the list of reconciled files
     reconciledFileStore[remoteFileId] = remoteFileStore[remoteFileId];
-    // reconciledFiles.push(remoteFile);
   }
 
   return reconciledFileStore;
