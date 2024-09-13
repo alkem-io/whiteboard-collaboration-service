@@ -3,11 +3,12 @@ import {
   ExcalidrawFileStore,
   ExcalidrawImageElement,
 } from '../types';
+import { DeepReadonly } from './deep.readonly';
 
 export const reconcileFiles = (
-  localElements: ExcalidrawElement[],
-  localFileStore: ExcalidrawFileStore,
-  remoteFileStore: ExcalidrawFileStore,
+  localElements: readonly ExcalidrawElement[],
+  localFileStore: DeepReadonly<ExcalidrawFileStore>,
+  remoteFileStore: DeepReadonly<ExcalidrawFileStore>,
 ): ExcalidrawFileStore => {
   const reconciledFileStore = { ...localFileStore };
 

@@ -60,7 +60,13 @@ export class UtilService {
     );
   }
 
-  public async fetch(roomId: string): Promise<ExcalidrawContent> {
+  /**
+   * Fetches the content of the whiteboard from DB or if not found returns an initial empty content.
+   * @param roomId Whiteboard ID
+   */
+  public async fetchContentFromDbOrEmpty(
+    roomId: string,
+  ): Promise<ExcalidrawContent> {
     const { data } = await this.integrationService.fetch(
       new FetchInputData(roomId),
     );

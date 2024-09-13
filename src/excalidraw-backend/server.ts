@@ -7,7 +7,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { debounce } from 'lodash';
+import { debounce, DebouncedFunc } from 'lodash';
 import {
   COLLABORATOR_MODE,
   CollaboratorModeReasons,
@@ -20,8 +20,11 @@ import {
   DISCONNECT,
   DISCONNECTING,
   ExcalidrawContent,
+  ExcalidrawElement,
+  ExcalidrawFileStore,
   IDLE_STATE,
   INIT_ROOM,
+  InMemorySnapshot,
   JOIN_ROOM,
   RemoteSocketIoSocket,
   resetCollaboratorModeDebounceWait,
@@ -46,6 +49,7 @@ import {
   authorizeWithRoomAndJoinHandler,
   canSocketSave,
   closeConnection,
+  DeepReadonly,
   disconnectEventHandler,
   disconnectingEventHandler,
   idleStateEventHandler,
@@ -66,6 +70,9 @@ import { isSaveErrorData } from '../services/whiteboard-integration/outputs';
 type SaveMessageOpts = { timeout: number };
 type RoomTrackers = Map<string, AbortController>;
 type SocketTrackers = Map<string, AbortController>;
+type SaveRoomFunction = (roomId: string) => Promise<void>;
+type DebouncedSaveFunction = DebouncedFunc<SaveRoomFunction>;
+type DebouncedSaveFunctionMap = Map<string, DebouncedSaveFunction>;
 
 @Injectable()
 export class Server {
@@ -74,6 +81,7 @@ export class Server {
   private readonly contributionTrackers: RoomTrackers = new Map();
   private readonly autoSaveTrackers: RoomTrackers = new Map();
   private readonly collaboratorInactivityTrackers: SocketTrackers = new Map();
+  private readonly debouncedSaveFnMap: DebouncedSaveFunctionMap = new Map();
 
   private readonly contributionWindowMs: number;
   private readonly saveIntervalMs: number;
@@ -81,7 +89,7 @@ export class Server {
   private readonly saveConsecutiveFailedAttempts: number;
   private readonly collaboratorInactivityMs: number;
 
-  private snapshots: Map<string, ExcalidrawContent> = new Map();
+  private snapshots: Map<string, InMemorySnapshot> = new Map();
 
   constructor(
     @Inject(WINSTON_MODULE_NEST_PROVIDER) private logger: LoggerService,
@@ -186,7 +194,8 @@ export class Server {
       // delete trackers that were left locally
       this.deleteTrackersForRoom(roomId);
 
-      await this.saveRoom(roomId);
+      // await this.saveRoom(roomId);
+      this.debouncedSave.flush();
       // todo: should we keep it cached?
       this.snapshots.delete(roomId);
     });
@@ -223,10 +232,8 @@ export class Server {
       });
 
       socket.on(JOIN_ROOM, async (roomID) => {
-        const content = await this.getRoomContent(roomID);
-        if (!this.snapshots.has(roomID)) {
-          this.snapshots.set(roomID, content);
-        }
+        const content = await this.getSnapshotOrFetch(roomID);
+
         // this logic could be provided by an entitlement (license) service
         await authorizeWithRoomAndJoinHandler(
           roomID,
@@ -251,6 +258,7 @@ export class Server {
                 ),
               );
               this.resetCollaboratorInactivityTrackerForSocket(socket);
+              // todo extract to a function
               let eventData:
                 | SocketEventData<ServerBroadcastPayload>
                 | undefined;
@@ -261,42 +269,17 @@ export class Server {
                   message: e?.message ?? JSON.stringify(e),
                 });
               }
-
               if (!eventData) {
                 return;
               }
 
-              const snapshot = this.snapshots.get(roomID);
-
-              if (!snapshot) {
-                return;
-              }
-
-              if (eventData.type === 'sync-check') {
-                console.log(
-                  'sync-check',
-                  JSON.stringify(
-                    detectChanges(
-                      snapshot.elements,
-                      eventData.payload.elements,
-                    ),
-                    null,
-                    2,
-                  ),
-                );
-              }
-
-              snapshot.elements = reconcileElements(
-                snapshot.elements,
+              this.createAndStoreLatestSnapshot(
+                roomID,
                 eventData.payload.elements,
-              );
-              snapshot.files = reconcileFiles(
-                snapshot.elements,
-                snapshot.files,
                 eventData.payload.files,
               );
-              //
-              this.debouncedSave(roomID);
+
+              this.queueSave(roomID);
             },
           );
         }
@@ -423,6 +406,23 @@ export class Server {
     return ac;
   }
 
+  private createAndStoreLatestSnapshot(
+    roomId: string,
+    remoteElements: readonly ExcalidrawElement[],
+    remoteFileStore: DeepReadonly<ExcalidrawFileStore>,
+  ) {
+    const snapshot = this.snapshots.get(roomId);
+    if (!snapshot) {
+      return;
+    }
+
+    const reconciledSnapshot = InMemorySnapshot.reconcile(
+      snapshot,
+      remoteElements,
+      remoteFileStore,
+    );
+    this.snapshots.set(roomId, reconciledSnapshot);
+  }
   /***
    * Sends save requests to a random sockets until it's successful after a fixed set of retries
    *
@@ -609,7 +609,7 @@ export class Server {
 
   public async initSceneForSocket(socket: SocketIoSocket, roomId: string) {
     // await setTimeout(1000, null);
-    const content = await this.getRoomContent(roomId);
+    const content = await this.getSnapshotOrFetch(roomId);
     const data = jsonToArrayBuffer({
       type: SCENE_INIT,
       payload: content,
@@ -618,30 +618,72 @@ export class Server {
     this.logger.verbose?.(`Scene init sent to '${socket.data.userInfo.email}'`);
   }
 
-  /**
-   * Called once after X milliseconds of the last received save request
-   * @private
-   */
-  private debouncedSave = debounce(
-    (roomId: string) => this.saveRoom(roomId),
-    3000,
-    { leading: false, trailing: true },
-  );
+  // todo: move to a helper class
+  private queueSave(roomId: string) {
+    const debouncedSave = this.debouncedSaveFnMap.get(roomId);
+    if (!debouncedSave) {
+      // will produce too much logging
+      return;
+    }
 
-  private async getRoomContent(roomId: string) {
-    return this.snapshots.get(roomId) ?? (await this.utilService.fetch(roomId));
+    debouncedSave(roomId);
+  }
+  /**
+   *  Creates a new debounced save function.
+   *  Called once after X milliseconds of the last received save request; Guaranteed save every 2*X milliseconds;
+   *
+   *  Adds it to __debouncedSaveFnMap__.
+   *  To be used when the room is created, and used only for that room
+   *  Use __cancelDebouncedSave__ to cancel this function
+   *  */
+  private createDebouncedSave(roomId: string): DebouncedSaveFunction {
+    const debouncedSave = debounce(
+      (roomId: string) => this.saveRoom(roomId),
+      3000, // todo extract to config
+      { leading: false, trailing: true, maxWait: 6000 }, // todo extract to config
+    );
+    this.debouncedSaveFnMap.set(roomId, debouncedSave);
+
+    return debouncedSave;
   }
 
-  private async saveRoom(roomId: string) {
-    const content = this.snapshots.get(roomId);
-    if (!content) {
+  private cancelDebouncedSave(roomId: string) {
+    const debouncedSaveFn = this.debouncedSaveFnMap.get(roomId);
+
+    if (!debouncedSaveFn) {
       this.logger.error(
-        `No content found for room '${roomId}' in the local storage!`,
+        `No debounced save function found for room '${roomId}'`,
       );
       return;
     }
 
-    const { data } = await this.utilService.save(roomId, content);
+    debouncedSaveFn.cancel();
+  }
+
+  private async getSnapshotOrFetch(roomId: string) {
+    const snapshotContent = this.snapshots.get(roomId);
+
+    if (!snapshotContent) {
+      const fetchedContent =
+        await this.utilService.fetchContentFromDbOrEmpty(roomId);
+      this.snapshots.set(roomId, new InMemorySnapshot(fetchedContent, 1));
+
+      return fetchedContent;
+    }
+
+    return snapshotContent;
+  }
+
+  private async saveRoom(roomId: string) {
+    const snapshot = this.snapshots.get(roomId);
+    if (!snapshot) {
+      this.logger.error(
+        `No snapshot found for room '${roomId}' in the local storage!`,
+      );
+      return;
+    }
+
+    const { data } = await this.utilService.save(roomId, snapshot.content);
     if (isSaveErrorData(data)) {
       this.logger.error(`Failed to save room '${roomId}': ${data.error}`);
     } else {

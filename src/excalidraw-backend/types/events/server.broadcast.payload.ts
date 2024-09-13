@@ -1,9 +1,8 @@
 import { ExcalidrawElement } from '../excalidraw.element';
-import { ExcalidrawFile } from '../excalidraw.file';
+import { ExcalidrawFileStore } from '../excalidraw.file';
+import { DeepReadonly } from '../../utils';
 
 export type ServerBroadcastPayload = {
   elements: readonly ExcalidrawElement[];
-  files: {
-    [id: string]: ExcalidrawFile;
-  };
+  files: DeepReadonly<ExcalidrawFileStore>;
 };
