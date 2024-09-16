@@ -19,7 +19,6 @@ import {
   defaultSaveTimeout,
   DISCONNECT,
   DISCONNECTING,
-  ExcalidrawContent,
   ExcalidrawElement,
   ExcalidrawFileStore,
   IDLE_STATE,
@@ -62,9 +61,6 @@ import { arrayRandomElement, isAbortError, jsonToArrayBuffer } from '../util';
 import { ConfigType } from '../config';
 import { tryDecodeIncoming } from './utils/decode.incoming';
 import { ServerBroadcastPayload } from './types/events';
-import { reconcileElements } from './utils/reconcile';
-import { detectChanges } from './utils/detect.changes';
-import { reconcileFiles } from './utils/reconcile.files';
 import { isSaveErrorData } from '../services/whiteboard-integration/outputs';
 
 type SaveMessageOpts = { timeout: number };
@@ -81,6 +77,7 @@ export class Server {
   private readonly contributionTrackers: RoomTrackers = new Map();
   private readonly autoSaveTrackers: RoomTrackers = new Map();
   private readonly collaboratorInactivityTrackers: SocketTrackers = new Map();
+  // todo: try WeakMap or better yet - WeakSet
   private readonly debouncedSaveFnMap: DebouncedSaveFunctionMap = new Map();
 
   private readonly contributionWindowMs: number;
@@ -167,6 +164,8 @@ export class Server {
         // const ac = this.startAutoSaveTrackerForRoom(roomId);
         // this.autoSaveTrackers.set(roomId, ac);
       }
+
+      this.createAndStoreDebouncedSave(roomId);
     });
     adapter.on(DELETE_ROOM, async (roomId: string) => {
       if (!isRoomId(roomId)) {
@@ -193,9 +192,10 @@ export class Server {
       );
       // delete trackers that were left locally
       this.deleteTrackersForRoom(roomId);
-
-      // await this.saveRoom(roomId);
-      this.debouncedSave.flush();
+      // execute immediately the queued call (if any)
+      await this.flushDebouncedSave(roomId);
+      // delete the debounced save function
+      this.cancelDebouncedSave(roomId);
       // todo: should we keep it cached?
       this.snapshots.delete(roomId);
     });
@@ -232,7 +232,7 @@ export class Server {
       });
 
       socket.on(JOIN_ROOM, async (roomID) => {
-        const content = await this.getSnapshotOrFetch(roomID);
+        await this.loadSnapshot(roomID);
 
         // this logic could be provided by an entitlement (license) service
         await authorizeWithRoomAndJoinHandler(
@@ -608,11 +608,13 @@ export class Server {
   );
 
   public async initSceneForSocket(socket: SocketIoSocket, roomId: string) {
-    // await setTimeout(1000, null);
-    const content = await this.getSnapshotOrFetch(roomId);
+    const snapshot = await this.loadSnapshot(roomId);
     const data = jsonToArrayBuffer({
       type: SCENE_INIT,
-      payload: content,
+      payload: {
+        elements: snapshot.content.elements,
+        files: snapshot.content.files,
+      },
     });
     this.wsServer.to(socket.id).emit(SCENE_INIT, data);
     this.logger.verbose?.(`Scene init sent to '${socket.data.userInfo.email}'`);
@@ -629,20 +631,23 @@ export class Server {
     debouncedSave(roomId);
   }
   /**
-   *  Creates a new debounced save function.
+   *  Creates a new debounced save function for a room and stores it in a Map.
    *  Called once after X milliseconds of the last received save request; Guaranteed save every 2*X milliseconds;
    *
    *  Adds it to __debouncedSaveFnMap__.
    *  To be used when the room is created, and used only for that room
    *  Use __cancelDebouncedSave__ to cancel this function
+   *  Use flushDebouncedSave to activate this function
    *  */
-  private createDebouncedSave(roomId: string): DebouncedSaveFunction {
+  private createAndStoreDebouncedSave(roomId: string): DebouncedSaveFunction {
     const debouncedSave = debounce(
       (roomId: string) => this.saveRoom(roomId),
       3000, // todo extract to config
       { leading: false, trailing: true, maxWait: 6000 }, // todo extract to config
     );
     this.debouncedSaveFnMap.set(roomId, debouncedSave);
+
+    this.logger.verbose?.(`Debounced save just created for '${roomId}'`);
 
     return debouncedSave;
   }
@@ -658,17 +663,41 @@ export class Server {
     }
 
     debouncedSaveFn.cancel();
+
+    this.logger.verbose?.(`Debounced save just canceled for '${roomId}'`);
   }
 
-  private async getSnapshotOrFetch(roomId: string) {
+  private async flushDebouncedSave(roomId: string) {
+    const debouncedSaveFn = this.debouncedSaveFnMap.get(roomId);
+
+    if (!debouncedSaveFn) {
+      this.logger.error(
+        `No debounced save function found for room '${roomId}'`,
+      );
+      return;
+    }
+
+    this.logger.verbose?.(`Debounced save just flushed for '${roomId}'`);
+    await debouncedSaveFn.flush();
+  }
+
+  /**
+   * Loads the snapshot in the in-memory Map and returns it.
+   * The snapshot is loaded from the DB if it's not found in the Map.
+   * @param roomId
+   * @returns The snapshot
+   */
+  private async loadSnapshot(roomId: string) {
     const snapshotContent = this.snapshots.get(roomId);
 
     if (!snapshotContent) {
       const fetchedContent =
         await this.utilService.fetchContentFromDbOrEmpty(roomId);
-      this.snapshots.set(roomId, new InMemorySnapshot(fetchedContent, 1));
 
-      return fetchedContent;
+      const newSnapshot = new InMemorySnapshot(fetchedContent, 1);
+      this.snapshots.set(roomId, newSnapshot);
+
+      return newSnapshot;
     }
 
     return snapshotContent;

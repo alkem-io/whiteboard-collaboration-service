@@ -13,6 +13,7 @@ import { ExcalidrawContent } from '../../excalidraw-backend/types';
 import { isFetchErrorData } from '../whiteboard-integration/outputs';
 import { excalidrawInitContent } from '../../util';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
+import { DeepReadonly } from '../../excalidraw-backend/utils';
 
 @Injectable()
 export class UtilService {
@@ -54,7 +55,7 @@ export class UtilService {
     );
   }
 
-  public save(roomId: string, content: ExcalidrawContent) {
+  public save(roomId: string, content: DeepReadonly<ExcalidrawContent>) {
     return this.integrationService.save(
       new SaveInputData(roomId, JSON.stringify(content)),
     );
