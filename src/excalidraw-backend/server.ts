@@ -7,16 +7,14 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { debounce, DebouncedFunc } from 'lodash';
+import { debounce, DebouncedFunc, throttle } from 'lodash';
 import {
   COLLABORATOR_MODE,
   CollaboratorModeReasons,
   CONNECTION,
   defaultCollaboratorInactivity,
   defaultContributionInterval,
-  defaultSaveConsecutiveFailedAttempts,
   defaultSaveInterval,
-  defaultSaveTimeout,
   DISCONNECT,
   DISCONNECTING,
   ExcalidrawElement,
@@ -25,12 +23,9 @@ import {
   INIT_ROOM,
   InMemorySnapshot,
   JOIN_ROOM,
-  RemoteSocketIoSocket,
   resetCollaboratorModeDebounceWait,
-  SaveResponse,
   SCENE_INIT,
   SERVER_BROADCAST,
-  SERVER_SAVE_REQUEST,
   SERVER_SIDE_ROOM_DELETED,
   SERVER_VOLATILE_BROADCAST,
   SocketEventData,
@@ -46,7 +41,6 @@ import { UserInfo } from '../services/whiteboard-integration/user.info';
 import { UtilService } from '../services/util/util.service';
 import {
   authorizeWithRoomAndJoinHandler,
-  canSocketSave,
   closeConnection,
   DeepReadonly,
   disconnectEventHandler,
@@ -57,33 +51,31 @@ import {
 } from './utils';
 import { CREATE_ROOM, DELETE_ROOM } from './adapters/adapter.event.names';
 import { APP_ID } from '../app.id';
-import { arrayRandomElement, isAbortError, jsonToArrayBuffer } from '../util';
+import { isAbortError, jsonToArrayBuffer } from '../util';
 import { ConfigType } from '../config';
 import { tryDecodeIncoming } from './utils/decode.incoming';
 import { ServerBroadcastPayload } from './types/events';
 import { isSaveErrorData } from '../services/whiteboard-integration/outputs';
 
-type SaveMessageOpts = { timeout: number };
 type RoomTrackers = Map<string, AbortController>;
 type SocketTrackers = Map<string, AbortController>;
 type SaveRoomFunction = (roomId: string) => Promise<void>;
-type DebouncedSaveFunction = DebouncedFunc<SaveRoomFunction>;
-type DebouncedSaveFunctionMap = Map<string, DebouncedSaveFunction>;
+
+type ThrottledFunc<T extends (...args: any[]) => any> = DebouncedFunc<T>;
+type ThrottledSaveFunction = ThrottledFunc<SaveRoomFunction>;
+type ThrottledSaveFunctionMap = Map<string, ThrottledSaveFunction>;
 
 @Injectable()
 export class Server {
   private readonly wsServer: SocketIoServer;
 
   private readonly contributionTrackers: RoomTrackers = new Map();
-  private readonly autoSaveTrackers: RoomTrackers = new Map();
   private readonly collaboratorInactivityTrackers: SocketTrackers = new Map();
   // todo: try WeakMap or better yet - WeakSet
-  private readonly debouncedSaveFnMap: DebouncedSaveFunctionMap = new Map();
+  private readonly throttledSaveFnMap: ThrottledSaveFunctionMap = new Map();
 
   private readonly contributionWindowMs: number;
   private readonly saveIntervalMs: number;
-  private readonly saveTimeoutMs: number;
-  private readonly saveConsecutiveFailedAttempts: number;
   private readonly collaboratorInactivityMs: number;
 
   private snapshots: Map<string, InMemorySnapshot> = new Map();
@@ -105,13 +97,8 @@ export class Server {
       )
       .catch(this.logger.error);
 
-    const {
-      contribution_window,
-      save_interval,
-      save_timeout,
-      save_consecutive_failed_attempts,
-      collaborator_inactivity,
-    } = this.configService.get('settings.collaboration', { infer: true });
+    const { contribution_window, save_interval, collaborator_inactivity } =
+      this.configService.get('settings.collaboration', { infer: true });
 
     this.contributionWindowMs =
       (contribution_window ?? defaultContributionInterval) * 1000;
@@ -119,9 +106,6 @@ export class Server {
       (collaborator_inactivity ?? defaultCollaboratorInactivity) * 1000;
 
     this.saveIntervalMs = (save_interval ?? defaultSaveInterval) * 1000;
-    this.saveTimeoutMs = (save_timeout ?? defaultSaveTimeout) * 1000;
-    this.saveConsecutiveFailedAttempts =
-      save_consecutive_failed_attempts ?? defaultSaveConsecutiveFailedAttempts;
   }
 
   private async fetchSocketsSafe(roomID: string) {
@@ -156,16 +140,7 @@ export class Server {
         this.contributionTrackers.set(roomId, ac);
       }
 
-      const autosaveTracker = this.autoSaveTrackers.get(roomId);
-      if (!autosaveTracker) {
-        this.logger.verbose?.(
-          `Starting auto save tracker for room '${roomId}'`,
-        );
-        // const ac = this.startAutoSaveTrackerForRoom(roomId);
-        // this.autoSaveTrackers.set(roomId, ac);
-      }
-
-      this.createAndStoreDebouncedSave(roomId);
+      this.createAndStoreThrottledSaveForRoom(roomId, this.saveIntervalMs);
     });
     adapter.on(DELETE_ROOM, async (roomId: string) => {
       if (!isRoomId(roomId)) {
@@ -193,9 +168,9 @@ export class Server {
       // delete trackers that were left locally
       this.deleteTrackersForRoom(roomId);
       // execute immediately the queued call (if any)
-      await this.flushDebouncedSave(roomId);
-      // delete the debounced save function
-      this.cancelDebouncedSave(roomId);
+      await this.flushThrottledSave(roomId);
+      // delete the throttled save function
+      this.cancelThrottledSave(roomId);
       // todo: should we keep it cached?
       this.snapshots.delete(roomId);
     });
@@ -361,51 +336,6 @@ export class Server {
     return this.utilService.contribution(roomId, users);
   }
 
-  private startAutoSaveTrackerForRoom(roomId: string) {
-    const ac = new AbortController();
-    (async () => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      for await (const _ of setInterval(this.saveIntervalMs, null, {
-        signal: ac.signal,
-      })) {
-        const data = await this.sendSaveMessage(roomId, {
-          timeout: this.saveTimeoutMs,
-        });
-
-        if (data === undefined) {
-          this.logger.verbose?.(
-            `No eligible sockets found to save '${roomId}'`,
-          );
-        } else if (data.saved) {
-          data.socket.data.consecutiveFailedSaves = 0;
-          this.logger.verbose?.(
-            `Room '${roomId}' saved successful by '${data.socket.data.userInfo.email}'`,
-          );
-        } else {
-          data.socket.data.consecutiveFailedSaves++;
-          data.socket.data.canSave =
-            data.socket.data.consecutiveFailedSaves <
-            this.saveConsecutiveFailedAttempts;
-          this.logger.error(
-            `Saving '${roomId}' failed for '${data.socket.data.userInfo.email}'`,
-          );
-        }
-      }
-    })().catch((e) => {
-      if (isAbortError(e)) {
-        this.logger.verbose?.(
-          `Auto save tracker for room '${roomId}' was aborted with reason '${e.cause}'`,
-        );
-      } else {
-        this.logger.error?.(
-          `Auto save tracker for room '${roomId}' failed: ${e.message}`,
-        );
-      }
-    });
-
-    return ac;
-  }
-
   private createAndStoreLatestSnapshot(
     roomId: string,
     remoteElements: readonly ExcalidrawElement[],
@@ -423,73 +353,6 @@ export class Server {
     );
     this.snapshots.set(roomId, reconciledSnapshot);
   }
-  /***
-   * Sends save requests to a random sockets until it's successful after a fixed set of retries
-   *
-   * @param roomId The room that needs saving
-   * @param opts Save options
-   */
-  private async sendSaveMessage(
-    roomId: string,
-    opts: SaveMessageOpts,
-  ): Promise<{ saved: boolean; socket: RemoteSocketIoSocket } | undefined> {
-    const { timeout } = opts;
-    // get only sockets which can save
-    const socketsCanSave = (await this.fetchSocketsSafe(roomId)).filter(
-      canSocketSave,
-    );
-    // return if no eligible sockets
-    if (!socketsCanSave.length) {
-      return undefined;
-    }
-    // choose a random socket which can save
-    const randomSocketWithUpdateFlag = arrayRandomElement(socketsCanSave);
-    // sends a save request to the socket and wait for a response
-    try {
-      // we are waiting for a single response, so destruct to just the first element
-      const [response] = await this.wsServer
-        .to(randomSocketWithUpdateFlag.id)
-        .timeout(timeout)
-        .emitWithAck(SERVER_SAVE_REQUEST);
-      // log the response
-      this.logResponse(response, randomSocketWithUpdateFlag, roomId);
-    } catch (e) {
-      if (this.autoSaveTrackers.get(roomId)) {
-        // avoid false-positives where the room is deleted and the save request is still running
-        this.logger.error?.(
-          `User '${randomSocketWithUpdateFlag.data.userInfo.email}' did not respond to '${SERVER_SAVE_REQUEST}' event after ${timeout}ms`,
-        );
-      }
-      return { saved: false, socket: randomSocketWithUpdateFlag };
-    }
-
-    return { saved: true, socket: randomSocketWithUpdateFlag };
-  }
-
-  private logResponse(
-    response: SaveResponse,
-    socket: RemoteSocketIoSocket,
-    roomId: string,
-  ) {
-    if (!response.success && this.autoSaveTrackers.get(roomId)) {
-      // avoid false-positives where the room is deleted and the save request is still running
-      this.logger.error(
-        `User ${
-          socket.data.userInfo.email
-        } failed to save whiteboard '${roomId}': ${response.errors?.join(
-          '; ',
-        )}`,
-      );
-    } else if (response.errors) {
-      this.logger.warn(
-        `User '${
-          socket.data.userInfo.email
-        }' saved Whiteboard '${roomId}' with some errors: ${response.errors?.join(
-          ';',
-        )}'`,
-      );
-    }
-  }
 
   private getUserInfo(socket: SocketIoSocket): Promise<UserInfo | undefined> {
     return this.utilService.getUserInfo({
@@ -506,13 +369,6 @@ export class Server {
       this.logger.verbose?.(
         `Deleted contribution tracker for room '${roomId}'`,
       );
-    }
-
-    const saveAC = this.autoSaveTrackers.get(roomId);
-    if (saveAC) {
-      saveAC.abort('deleted');
-      this.autoSaveTrackers.delete(roomId);
-      this.logger.verbose?.(`Deleted auto save tracker for room '${roomId}'`);
     }
   }
 
@@ -588,7 +444,7 @@ export class Server {
       }
     }
   }
-
+  // todo: do it without abort controller
   private resetCollaboratorInactivityTrackerForSocket = debounce(
     (socket: SocketIoSocket) => {
       const abortController = this.collaboratorInactivityTrackers.get(
@@ -622,63 +478,64 @@ export class Server {
 
   // todo: move to a helper class
   private queueSave(roomId: string) {
-    const debouncedSave = this.debouncedSaveFnMap.get(roomId);
-    if (!debouncedSave) {
+    const throttledSave = this.throttledSaveFnMap.get(roomId);
+    if (!throttledSave) {
       // will produce too much logging
       return;
     }
 
-    debouncedSave(roomId);
+    throttledSave(roomId);
   }
   /**
-   *  Creates a new debounced save function for a room and stores it in a Map.
-   *  Called once after X milliseconds of the last received save request; Guaranteed save every 2*X milliseconds;
-   *
-   *  Adds it to __debouncedSaveFnMap__.
-   *  To be used when the room is created, and used only for that room
-   *  Use __cancelDebouncedSave__ to cancel this function
-   *  Use flushDebouncedSave to activate this function
-   *  */
-  private createAndStoreDebouncedSave(roomId: string): DebouncedSaveFunction {
-    const debouncedSave = debounce(
+   *  Creates a new throttled save function for a room and stores it in  __throttledSaveFnMap__.</br>
+   *  Called once after __wait__ milliseconds of the last received save request; Guaranteed save every __maxWait__ milliseconds;</br>
+   *  To be used when the room is created, and used only for that room.</br>
+   *  Use __cancelThrottledSave__ to cancel this function.</br>
+   *  Use __flushThrottledSave__ to invoke this function immediately.
+   */
+  private createAndStoreThrottledSaveForRoom(
+    roomId: string,
+    wait: number,
+  ): ThrottledSaveFunction {
+    const throttledSave = throttle(
       (roomId: string) => this.saveRoom(roomId),
-      3000, // todo extract to config
-      { leading: false, trailing: true, maxWait: 6000 }, // todo extract to config
+      wait,
+      { leading: false, trailing: true },
     );
-    this.debouncedSaveFnMap.set(roomId, debouncedSave);
+    this.throttledSaveFnMap.set(roomId, throttledSave);
 
-    this.logger.verbose?.(`Debounced save just created for '${roomId}'`);
+    this.logger.verbose?.(`Throttled save just created for '${roomId}'`);
 
-    return debouncedSave;
+    return throttledSave;
   }
 
-  private cancelDebouncedSave(roomId: string) {
-    const debouncedSaveFn = this.debouncedSaveFnMap.get(roomId);
+  private cancelThrottledSave(roomId: string) {
+    const throttledSaveFn = this.throttledSaveFnMap.get(roomId);
 
-    if (!debouncedSaveFn) {
+    if (!throttledSaveFn) {
       this.logger.error(
-        `No debounced save function found for room '${roomId}'`,
+        `No throttled save function found for room '${roomId}'`,
       );
       return;
     }
 
-    debouncedSaveFn.cancel();
+    throttledSaveFn.cancel();
 
-    this.logger.verbose?.(`Debounced save just canceled for '${roomId}'`);
+    this.logger.verbose?.(`Throttled save just canceled for '${roomId}'`);
   }
 
-  private async flushDebouncedSave(roomId: string) {
-    const debouncedSaveFn = this.debouncedSaveFnMap.get(roomId);
+  private async flushThrottledSave(roomId: string) {
+    const throttledSaveFn = this.throttledSaveFnMap.get(roomId);
 
-    if (!debouncedSaveFn) {
+    if (!throttledSaveFn) {
       this.logger.error(
-        `No debounced save function found for room '${roomId}'`,
+        `No throttled save function found for room '${roomId}'`,
       );
       return;
     }
 
-    this.logger.verbose?.(`Debounced save just flushed for '${roomId}'`);
-    await debouncedSaveFn.flush();
+    this.logger.verbose?.(`Throttled save just flushed for '${roomId}'`);
+    await throttledSaveFn.flush();
   }
 
   /**
