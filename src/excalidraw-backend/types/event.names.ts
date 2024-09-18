@@ -12,9 +12,9 @@ export const CONNECTION_CLOSED = 'connection-closed';
 
 export const SERVER_SIDE_ROOM_DELETED = 'server-side-room-deleted';
 // messages
+export const CONNECTION = 'connection';
 export const COLLABORATOR_MODE = 'collaborator-mode';
 export const IDLE_STATE = 'idle-state';
-export const CONNECTION = 'connection';
 export const INIT_ROOM = 'init-room';
 export const JOIN_ROOM = 'join-room';
 export const ROOM_USER_CHANGE = 'room-user-change';

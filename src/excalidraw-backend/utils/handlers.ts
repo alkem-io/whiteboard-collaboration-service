@@ -72,7 +72,6 @@ export const authorizeWithRoomAndJoinHandler = async (
   socket.data.viewer = canRead;
   // the user can't update if the collaborator limit has been reached
   socket.data.collaborator = !isCollaboratorLimitReached && canUpdate;
-  socket.data.canSave = canUpdate;
 
   const reason = calculateReasonForCollaborationMode(
     socket,

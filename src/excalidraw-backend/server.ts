@@ -35,7 +35,7 @@ import {
 } from './types';
 import { getExcalidrawBaseServerOrFail } from './index';
 import {
-  attachUserInfoMiddleware,
+  attachUserInfoOrFailMiddleware,
   initUserDataMiddleware,
 } from './middlewares';
 import { UserInfo } from '../services/whiteboard-integration/user.info';
@@ -187,7 +187,9 @@ export class Server {
     this.adapterInit();
     // middlewares
     this.wsServer.use(initUserDataMiddleware);
-    this.wsServer.use(attachUserInfoMiddleware(this.getUserInfo.bind(this)));
+    this.wsServer.use(
+      attachUserInfoOrFailMiddleware(this.getUserInfo.bind(this)),
+    );
 
     this.wsServer.on(CONNECTION, async (socket: SocketIoSocket) => {
       this.logger.verbose?.(
@@ -201,13 +203,12 @@ export class Server {
           return;
         }
 
-        // this.logger.error(err.message, err.stack, LogContext.EXCALIDRAW_SERVER);
-        console.error(err);
+        this.logger.error(err);
 
         if (err && err instanceof UnauthorizedException) {
           closeConnection(socket, err.message);
+          this.deleteCollaboratorInactivityTrackerForSocket(socket);
         }
-        this.deleteCollaboratorInactivityTrackerForSocket(socket);
       });
 
       socket.on(JOIN_ROOM, async (roomID) => {
