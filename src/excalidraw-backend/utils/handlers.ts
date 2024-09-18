@@ -8,14 +8,11 @@ import {
 import {
   CLIENT_BROADCAST,
   COLLABORATOR_MODE,
-  FIRST_IN_ROOM,
   IDLE_STATE,
-  NEW_USER,
   ROOM_USER_CHANGE,
 } from '../types';
 import { minCollaboratorsInRoom } from '../types';
-import { SocketEventData } from '../types';
-import { IdleStatePayload, ServerBroadcastPayload } from '../types/events';
+import { IdleStatePayload } from '../types/events';
 import { closeConnection } from './util';
 import { tryDecodeBinary, tryDecodeIncoming } from './decode.incoming';
 
@@ -107,16 +104,9 @@ const joinRoomHandler = async (
 
   logger?.verbose?.(`User '${userInfo.email}' has joined room '${roomID}'`);
 
-  const sockets = await fetchSocketsSafe(wsServer, roomID, logger);
-  if (sockets.length === 1) {
-    logger?.verbose?.(`User '${userInfo.email}' is first in room '${roomID}'`);
-    wsServer.to(socket.id).emit(FIRST_IN_ROOM);
-  } else {
-    logger?.verbose?.(`User '${userInfo.email}' emitted to room '${roomID}'`);
-    // socket.broadcast.to(roomID).emit(NEW_USER, socket.id);
-  }
-
-  const socketIDs = sockets.map((socket) => socket.id);
+  const socketIDs = (await fetchSocketsSafe(wsServer, roomID, logger)).map(
+    (socket) => socket.id,
+  );
   wsServer.in(roomID).emit(ROOM_USER_CHANGE, socketIDs);
 };
 /*

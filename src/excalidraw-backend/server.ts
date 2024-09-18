@@ -24,6 +24,7 @@ import {
   InMemorySnapshot,
   JOIN_ROOM,
   resetCollaboratorModeDebounceWait,
+  ROOM_SAVED,
   SCENE_INIT,
   SERVER_BROADCAST,
   SERVER_SIDE_ROOM_DELETED,
@@ -54,7 +55,7 @@ import { APP_ID } from '../app.id';
 import { isAbortError, jsonToArrayBuffer } from '../util';
 import { ConfigType } from '../config';
 import { tryDecodeIncoming } from './utils/decode.incoming';
-import { ServerBroadcastPayload } from './types/events';
+import { SceneInitPayload, ServerBroadcastPayload } from './types/events';
 import { isSaveErrorData } from '../services/whiteboard-integration/outputs';
 
 type RoomTrackers = Map<string, AbortController>;
@@ -140,7 +141,10 @@ export class Server {
         this.contributionTrackers.set(roomId, ac);
       }
 
-      this.createAndStoreThrottledSaveForRoom(roomId, this.saveIntervalMs);
+      this.createAndStoreThrottledSaveAndNotifyRoom(
+        roomId,
+        this.saveIntervalMs,
+      );
     });
     adapter.on(DELETE_ROOM, async (roomId: string) => {
       if (!isRoomId(roomId)) {
@@ -465,14 +469,14 @@ export class Server {
 
   public async initSceneForSocket(socket: SocketIoSocket, roomId: string) {
     const snapshot = await this.loadSnapshot(roomId);
-    const data = jsonToArrayBuffer({
+    const data: SceneInitPayload = {
       type: SCENE_INIT,
       payload: {
         elements: snapshot.content.elements,
         files: snapshot.content.files,
       },
-    });
-    this.wsServer.to(socket.id).emit(SCENE_INIT, data);
+    };
+    this.wsServer.to(socket.id).emit(SCENE_INIT, jsonToArrayBuffer(data));
     this.logger.verbose?.(`Scene init sent to '${socket.data.userInfo.email}'`);
   }
 
@@ -493,12 +497,15 @@ export class Server {
    *  Use __cancelThrottledSave__ to cancel this function.</br>
    *  Use __flushThrottledSave__ to invoke this function immediately.
    */
-  private createAndStoreThrottledSaveForRoom(
+  private createAndStoreThrottledSaveAndNotifyRoom(
     roomId: string,
     wait: number,
   ): ThrottledSaveFunction {
     const throttledSave = throttle(
-      (roomId: string) => this.saveRoom(roomId),
+      async (roomId: string) => {
+        await this.saveRoom(roomId);
+        this.notifyRoomSaved(roomId);
+      },
       wait,
       { leading: false, trailing: true },
     );
@@ -538,6 +545,9 @@ export class Server {
     await throttledSaveFn.flush();
   }
 
+  private notifyRoomSaved(roomId: string) {
+    this.wsServer.in(roomId).emit(ROOM_SAVED);
+  }
   /**
    * Loads the snapshot in the in-memory Map and returns it.
    * The snapshot is loaded from the DB if it's not found in the Map.

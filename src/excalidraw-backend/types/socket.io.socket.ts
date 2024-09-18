@@ -9,7 +9,6 @@ import {
   IDLE_STATE,
   SCENE_INIT,
   JOIN_ROOM,
-  NEW_USER,
   ROOM_USER_CHANGE,
   SERVER_BROADCAST,
   SERVER_VOLATILE_BROADCAST,
@@ -27,7 +26,6 @@ type ListenEvents = {
 };
 type EmitEvents = {
   [CLIENT_BROADCAST]: (data: ArrayBuffer) => void;
-  [NEW_USER]: (socketId: string) => void;
   [IDLE_STATE]: (data: ArrayBuffer) => void;
   [ROOM_USER_CHANGE]: (socketIds: Array<string>) => void;
   [CONNECTION_CLOSED]: (message?: string) => void;

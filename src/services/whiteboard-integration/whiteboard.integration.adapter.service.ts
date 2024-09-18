@@ -197,7 +197,7 @@ export class WhiteboardIntegrationAdapterService {
       (error: RMQConnectionError | undefined) => {
         this.logger.error(
           {
-            message: `Error was received while waiting for response: ${error?.err.message}`,
+            message: `Error was received while waiting for response: ${error?.err?.message}`,
             pattern,
             data,
             timeout: timeoutMs,
