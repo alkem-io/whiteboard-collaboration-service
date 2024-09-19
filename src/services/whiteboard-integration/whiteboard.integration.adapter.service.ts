@@ -60,7 +60,7 @@ export class WhiteboardIntegrationAdapterService {
       );
       return;
     }
-
+    // don't block the constructor
     this.client
       .connect()
       .then(() => {
@@ -68,7 +68,9 @@ export class WhiteboardIntegrationAdapterService {
           'Client proxy successfully connected to RabbitMQ',
         );
       })
-      .catch(this.logger.error);
+      .catch(({ err }: RMQConnectionError) =>
+        this.logger.error(err, err.stack),
+      );
 
     this.timeoutMs = this.configService.get(
       'settings.application.queue_response_timeout',
