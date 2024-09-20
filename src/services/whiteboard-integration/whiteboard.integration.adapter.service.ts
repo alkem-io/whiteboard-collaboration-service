@@ -68,8 +68,8 @@ export class WhiteboardIntegrationAdapterService {
           'Client proxy successfully connected to RabbitMQ',
         );
       })
-      .catch(({ err }: RMQConnectionError) =>
-        this.logger.error(err, err.stack),
+      .catch((error: RMQConnectionError | undefined) =>
+        this.logger.error(error?.err, error?.err.stack),
       );
 
     this.timeoutMs = this.configService.get(
@@ -125,7 +125,7 @@ export class WhiteboardIntegrationAdapterService {
 
   public async save(data: SaveInputData) {
     try {
-      return this.sendWithResponse<SaveOutputData, SaveInputData>(
+      return await this.sendWithResponse<SaveOutputData, SaveInputData>(
         WhiteboardIntegrationMessagePattern.SAVE,
         data,
       );
@@ -138,7 +138,7 @@ export class WhiteboardIntegrationAdapterService {
 
   public async fetch(data: FetchInputData) {
     try {
-      return this.sendWithResponse<FetchOutputData, FetchInputData>(
+      return await this.sendWithResponse<FetchOutputData, FetchInputData>(
         WhiteboardIntegrationMessagePattern.FETCH,
         data,
       );

@@ -6,6 +6,6 @@ export type ExcalidrawContent = {
   version: number;
   source: string;
   elements: ExcalidrawElement[];
-  appState: any; // todo
+  appState: Record<string, unknown>;
   files: ExcalidrawFileStore;
 };

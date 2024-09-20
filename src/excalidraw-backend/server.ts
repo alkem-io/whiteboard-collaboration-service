@@ -96,7 +96,7 @@ export class Server {
       .then(() =>
         this.logger.verbose?.('Excalidraw server initialized and running'),
       )
-      .catch(this.logger.error);
+      .catch((err) => this.logger.error(err));
 
     const { contribution_window, save_interval, collaborator_inactivity } =
       this.configService.get('settings.collaboration', { infer: true });

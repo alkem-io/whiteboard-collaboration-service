@@ -8,7 +8,7 @@ import { reconcileFiles } from '../utils/reconcile.files';
  * Represents an immutable point-in-time-snapshot of an Excalidraw content stored in memory.
  * It includes methods to reconcile local and remote content and create a new snapshot.
  * Can be used as versioning mechanism for Excalidraw content.
- * To reduce data deltas can be calculated between two snapshots.
+ * Data deltas can be calculated between two snapshots to reduce data transfers.
  */
 export class InMemorySnapshot {
   /**
@@ -56,15 +56,15 @@ export class InMemorySnapshot {
   ): InMemorySnapshot => {
     const {
       content: {
-        elements: localElement,
+        elements: localElements,
         files: localFileStore,
         ...restOfContent
       },
     } = snapshot;
 
-    const reconciledElements = reconcileElements(localElement, remoteElements);
+    const reconciledElements = reconcileElements(localElements, remoteElements);
     const reconciledFileStore = reconcileFiles(
-      localElement,
+      localElements,
       localFileStore,
       remoteFileStore,
     );
