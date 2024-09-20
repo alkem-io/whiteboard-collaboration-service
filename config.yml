@@ -30,7 +30,7 @@ settings:
   # application level settings
   application:
     # queue
-    queue: ${QUEUE}:auth
+    queue: ${QUEUE}:alkemio-whiteboards
     # MILLISECONDS wait time for a response after a request on the message queue
     queue_response_timeout: ${QUEUE_RESPONSE_TIMEOUT}:10000
   # the collaboration experience
