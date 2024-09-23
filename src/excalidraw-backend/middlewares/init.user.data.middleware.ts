@@ -15,9 +15,6 @@ export const initUserDataMiddleware: SimpleMiddlewareHandler = (
 
   socket.data.state = UserIdleState.ACTIVE;
 
-  socket.data.consecutiveFailedSaves = 0;
-  socket.data.canSave = false;
-
   socket.data.session = undefined;
 
   next();

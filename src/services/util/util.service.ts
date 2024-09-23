@@ -1,16 +1,24 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable, LoggerService } from '@nestjs/common';
 import { WhiteboardIntegrationService } from '../whiteboard-integration/whiteboard.integration.service';
 import { UserInfo } from '../whiteboard-integration/user.info';
 import {
   ContentModifiedInputData,
   ContributionInputData,
+  FetchInputData,
   InfoInputData,
+  SaveInputData,
   WhoInputData,
 } from '../whiteboard-integration/inputs';
+import { ExcalidrawContent } from '../../excalidraw-backend/types';
+import { isFetchErrorData } from '../whiteboard-integration/outputs';
+import { excalidrawInitContent } from '../../util';
+import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
+import { DeepReadonly } from '../../excalidraw-backend/utils';
 
 @Injectable()
 export class UtilService {
   constructor(
+    @Inject(WINSTON_MODULE_NEST_PROVIDER) private logger: LoggerService,
     private readonly integrationService: WhiteboardIntegrationService,
   ) {}
 
@@ -45,5 +53,34 @@ export class UtilService {
     return this.integrationService.contribution(
       new ContributionInputData(roomId, users),
     );
+  }
+
+  public save(roomId: string, content: DeepReadonly<ExcalidrawContent>) {
+    return this.integrationService.save(
+      new SaveInputData(roomId, JSON.stringify(content)),
+    );
+  }
+
+  /**
+   * Fetches the content of the whiteboard from DB or if not found returns an initial empty content.
+   * @param roomId Whiteboard ID
+   */
+  public async fetchContentFromDbOrEmpty(
+    roomId: string,
+  ): Promise<ExcalidrawContent> {
+    const { data } = await this.integrationService.fetch(
+      new FetchInputData(roomId),
+    );
+
+    if (isFetchErrorData(data)) {
+      return excalidrawInitContent;
+    }
+
+    try {
+      return JSON.parse(data.content);
+    } catch (e: any) {
+      this.logger.error(e, e?.stack);
+      return excalidrawInitContent;
+    }
   }
 }
