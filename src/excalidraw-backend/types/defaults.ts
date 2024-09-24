@@ -1,5 +1,5 @@
 export const defaultContributionInterval = 600;
-export const defaultSaveInterval = 10;
+export const defaultSaveInterval = 2000;
 export const defaultCollaboratorInactivity = 60 * 30; // 30 minutes
 
 export const resetCollaboratorModeDebounceWait = 1000;

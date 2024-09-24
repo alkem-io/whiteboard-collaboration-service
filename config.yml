@@ -41,8 +41,9 @@ settings:
     # the window in which contributions are accepted to be counted towards a single contribution event;
     # time is in SECONDS
     contribution_window: ${CONTRIBUTION_WINDOW}:600
-    # SECONDS between auto saves
-    save_interval: ${AUTOSAVE_INTERVAL}:10
+    # MILLISECONDS after the first change was made to the whiteboard before it's autosaved.
+    # This is preventing saving on every change - instead, all the changes done in the last interval are saved only once.
+    save_interval: ${AUTOSAVE_INTERVAL}:2000
     # SECONDS of inactivity before a collaborator is made view-only
     collaborator_inactivity: ${COLLABORATOR_INACTIVITY}:1800
     # how often the inactivity timer is reset;
