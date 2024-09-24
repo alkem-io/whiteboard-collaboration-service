@@ -83,7 +83,7 @@ export const reconcileElements = (
     }
   }
 
-  // const orderedElements = orderByFractionalIndex(reconciledElements);
+  const orderedElements = orderByFractionalIndex(reconciledElements);
 
   /**
    * todo: not sure how important is this and how does it affect the end result
@@ -96,5 +96,30 @@ export const reconcileElements = (
   // const syncedElemented = syncInvalidIndices(orderedElements);
 
   // return orderedElements as ReconciledExcalidrawElement[];
-  return reconciledElements;
+  // return reconciledElements;
+  return orderedElements;
+};
+
+/**
+ * Order the elements based on the fractional indices.
+ * - when fractional indices are identical, break the tie based on the element id
+ * - when there is no fractional index in one of the elements, respect the order of the array
+ */
+export const orderByFractionalIndex = (elements: ExcalidrawElement[]) => {
+  return elements.sort((a, b) => {
+    // in case the indices are not the defined at runtime
+    if (a.index && b.index) {
+      if (a.index < b.index) {
+        return -1;
+      } else if (a.index > b.index) {
+        return 1;
+      }
+
+      // break ties based on the element id
+      return a.id < b.id ? -1 : 1;
+    }
+
+    // defensively keep the array order
+    return 1;
+  });
 };

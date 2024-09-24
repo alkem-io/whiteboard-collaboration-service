@@ -171,6 +171,8 @@ export class Server {
       );
       // delete trackers that were left locally
       this.deleteTrackersForRoom(roomId);
+      // move the save out of the loop to prevent some reconciliation still happening
+      await setTimeout();
       // execute immediately the queued call (if any)
       await this.flushThrottledSave(roomId);
       // delete the throttled save function
@@ -351,12 +353,14 @@ export class Server {
       return;
     }
 
+    console.time('reconcile');
     const reconciledSnapshot = InMemorySnapshot.reconcile(
       snapshot,
       remoteElements,
       remoteFileStore,
     );
     this.snapshots.set(roomId, reconciledSnapshot);
+    console.timeEnd('reconcile');
   }
 
   private getUserInfo(socket: SocketIoSocket): Promise<UserInfo | undefined> {
