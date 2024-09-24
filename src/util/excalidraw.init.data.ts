@@ -1,7 +1,7 @@
 import { ExcalidrawContent } from '../excalidraw-backend/types';
 
 export const excalidrawInitContent: ExcalidrawContent = {
-  appState: undefined,
+  appState: {},
   source: '',
   type: 'excalidraw',
   version: 1,
