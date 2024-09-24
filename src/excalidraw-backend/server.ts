@@ -106,7 +106,7 @@ export class Server {
     this.collaboratorInactivityMs =
       (collaborator_inactivity ?? defaultCollaboratorInactivity) * 1000;
 
-    this.saveIntervalMs = (save_interval ?? defaultSaveInterval) * 1000;
+    this.saveIntervalMs = save_interval ?? defaultSaveInterval;
   }
 
   private async fetchSocketsSafe(roomID: string) {
@@ -493,7 +493,7 @@ export class Server {
   }
   /**
    *  Creates a new throttled save function for a room and stores it in  __throttledSaveFnMap__.</br>
-   *  Called once after __wait__ milliseconds of the last received save request; Guaranteed save every __maxWait__ milliseconds;</br>
+   *  Called once immediately on the first invocation, then once after __wait__ milliseconds; Guaranteed save every __maxWait__ milliseconds;</br>
    *  To be used when the room is created, and used only for that room.</br>
    *  Use __cancelThrottledSave__ to cancel this function.</br>
    *  Use __flushThrottledSave__ to invoke this function immediately.
@@ -508,7 +508,7 @@ export class Server {
         this.notifyRoomSaved(roomId);
       },
       wait,
-      { leading: false, trailing: true },
+      { leading: true, trailing: true },
     );
     this.throttledSaveFnMap.set(roomId, throttledSave);
 
