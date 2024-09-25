@@ -13,8 +13,4 @@ export * from './socket.io.socket';
 export * from './user.info.for.room';
 export * from './user.idle.state';
 
-export * from './excalidraw.content';
-export * from './excalidraw.element';
-export * from './excalidraw.file';
-
 export * from './in.memory.snapshot';

@@ -1,5 +1,5 @@
-import { ExcalidrawElement } from '../types';
 import { arrayToMap } from './array.to.map';
+import { ExcalidrawElement } from '../../excalidraw/types';
 // import { orderByFractionalIndex, syncInvalidIndices } from './fractionalIndex';
 
 const shouldDiscardRemoteElement = (

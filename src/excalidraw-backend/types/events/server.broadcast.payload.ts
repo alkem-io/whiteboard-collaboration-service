@@ -1,5 +1,5 @@
-import { ExcalidrawElement } from '../excalidraw.element';
-import { ExcalidrawFileStore } from '../excalidraw.file';
+import { ExcalidrawElement } from '../../../excalidraw/types/excalidraw.element';
+import { ExcalidrawFileStore } from '../../../excalidraw/types/excalidraw.file';
 import { DeepReadonly } from '../../utils';
 
 export type ServerBroadcastPayload = {

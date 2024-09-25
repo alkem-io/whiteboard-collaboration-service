@@ -1,12 +1,8 @@
-import {
-  ExcalidrawElement,
-  ExcalidrawFileStore,
-  ExcalidrawImageElement,
-} from '../types';
 import { DeepReadonly } from './deep.readonly';
+import { ExcalidrawElement, ExcalidrawFileStore } from '../../excalidraw/types';
 
 export const reconcileFiles = (
-  localElements: readonly ExcalidrawElement[],
+  _localElements: readonly ExcalidrawElement[],
   localFileStore: DeepReadonly<ExcalidrawFileStore>,
   remoteFileStore: DeepReadonly<ExcalidrawFileStore>,
 ): ExcalidrawFileStore => {
@@ -18,6 +14,11 @@ export const reconcileFiles = (
     if (reconciledFileStore[remoteFileId]) {
       continue;
     }
+    /** uncomment this when Excalidraw starts sending the element and the file at the same time
+     * otherwise it's causing a bug where the file is sent but the element that should fit the image is not
+     * then another event is sent with the host element but not the file
+     * so to accommodate this we store the file for future use
+     */
     // if it's not found locally - check if it's used by any element
     // const elementUsingTheFile = localElements.find(
     //   (element) =>
@@ -33,7 +34,3 @@ export const reconcileFiles = (
 
   return reconciledFileStore;
 };
-
-const isExcalidrawImageElement = (
-  element: ExcalidrawElement,
-): element is ExcalidrawImageElement => element.type === 'image';

@@ -17,8 +17,6 @@ import {
   defaultSaveInterval,
   DISCONNECT,
   DISCONNECTING,
-  ExcalidrawElement,
-  ExcalidrawFileStore,
   IDLE_STATE,
   INIT_ROOM,
   InMemorySnapshot,
@@ -47,6 +45,8 @@ import {
   disconnectEventHandler,
   disconnectingEventHandler,
   idleStateEventHandler,
+  isRoomId,
+  prepareContentForSave,
   serverBroadcastEventHandler,
   serverVolatileBroadcastEventHandler,
 } from './utils';
@@ -56,6 +56,7 @@ import { isAbortError, jsonToArrayBuffer } from '../util';
 import { ConfigType } from '../config';
 import { tryDecodeIncoming } from './utils/decode.incoming';
 import { SceneInitPayload, ServerBroadcastPayload } from './types/events';
+import { ExcalidrawElement, ExcalidrawFileStore } from '../excalidraw/types';
 import { isSaveErrorData } from '../services/whiteboard-integration/outputs';
 
 type RoomTrackers = Map<string, AbortController>;
@@ -592,5 +593,3 @@ export class Server {
     }
   }
 }
-// not that reliable, but best we can do
-const isRoomId = (id: string) => id.length === 36;
