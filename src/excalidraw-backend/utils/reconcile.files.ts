@@ -12,6 +12,14 @@ export const reconcileFiles = (
     // find a local file that matches the remote file
     // if it's already in - discard the remote
     if (reconciledFileStore[remoteFileId]) {
+      // if the file already exists in the local store
+      // update just the urls, because they might have been changed.
+      // sometimes files get converted from dataURL to URL, and we would like to have the URL
+      reconciledFileStore[remoteFileId] = {
+        ...reconciledFileStore[remoteFileId],
+        url: remoteFileStore[remoteFileId].url,
+        dataURL: remoteFileStore[remoteFileId].dataURL,
+      };
       continue;
     }
     /** uncomment this when Excalidraw starts sending the element and the file at the same time
