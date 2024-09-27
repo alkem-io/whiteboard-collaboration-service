@@ -354,14 +354,12 @@ export class Server {
       return;
     }
 
-    console.time('reconcile');
     const reconciledSnapshot = InMemorySnapshot.reconcile(
       snapshot,
       remoteElements,
       remoteFileStore,
     );
     this.snapshots.set(roomId, reconciledSnapshot);
-    console.timeEnd('reconcile');
   }
 
   private getUserInfo(socket: SocketIoSocket): Promise<UserInfo | undefined> {
@@ -585,7 +583,8 @@ export class Server {
       return;
     }
 
-    const { data } = await this.utilService.save(roomId, snapshot.content);
+    const cleanContent = prepareContentForSave(snapshot);
+    const { data } = await this.utilService.save(roomId, cleanContent);
     if (isSaveErrorData(data)) {
       this.logger.error(`Failed to save room '${roomId}': ${data.error}`);
     } else {

@@ -1,5 +1,6 @@
 import { arrayToMap } from './array.to.map';
 import { ExcalidrawElement } from '../../excalidraw/types';
+import { arrayToMapBy } from './array.to.map.by';
 // import { orderByFractionalIndex, syncInvalidIndices } from './fractionalIndex';
 
 const shouldDiscardRemoteElement = (
@@ -83,8 +84,6 @@ export const reconcileElements = (
     }
   }
 
-  const orderedElements = orderByFractionalIndex(reconciledElements);
-
   /**
    * todo: not sure how important is this and how does it affect the end result
    * since the debounce is set to 60 seconds, which might mean that the room has already closed
@@ -97,29 +96,43 @@ export const reconcileElements = (
 
   // return orderedElements as ReconciledExcalidrawElement[];
   // return reconciledElements;
-  return orderedElements;
+  return orderByPrecedingElement(reconciledElements);
 };
 
-/**
- * Order the elements based on the fractional indices.
- * - when fractional indices are identical, break the tie based on the element id
- * - when there is no fractional index in one of the elements, respect the order of the array
- */
-export const orderByFractionalIndex = (elements: ExcalidrawElement[]) => {
-  return elements.sort((a, b) => {
-    // in case the indices are not the defined at runtime
-    if (a.index && b.index) {
-      if (a.index < b.index) {
-        return -1;
-      } else if (a.index > b.index) {
-        return 1;
-      }
+const orderByPrecedingElement = (
+  unOrderedElements: ExcalidrawElement[],
+): ExcalidrawElement[] | never => {
+  // validated there is just one starting element
+  const startElements = unOrderedElements.filter(
+    (el) => el.__precedingElement__ === '^',
+  );
 
-      // break ties based on the element id
-      return a.id < b.id ? -1 : 1;
+  if (startElements.length !== 1) {
+    throw new Error(
+      `There must be exactly one element with __precedingElement__ = '^'`,
+    );
+  }
+  // create a map of elements by <__precedingElement__, element that has this __precedingElement__ value>
+  const elementMapByPrecedingKey = arrayToMapBy(
+    unOrderedElements,
+    '__precedingElement__',
+  );
+  const orderedElements: ExcalidrawElement[] = [];
+  // the array is starting with element that has no preceding element
+  let parentElement = startElements[0];
+  orderedElements.push(parentElement);
+  // Follow the chain of __precedingElement__
+  while (true) {
+    const childElement = elementMapByPrecedingKey.get(parentElement.id);
+
+    if (!childElement) {
+      // we have reached the end of the chain
+      break;
     }
 
-    // defensively keep the array order
-    return 1;
-  });
+    orderedElements.push(childElement);
+    parentElement = childElement;
+  }
+
+  return orderedElements;
 };

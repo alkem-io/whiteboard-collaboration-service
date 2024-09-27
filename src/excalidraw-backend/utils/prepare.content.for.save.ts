@@ -3,6 +3,7 @@ import { DeepReadonly } from './deep.readonly';
 import { ExcalidrawContent, ExcalidrawFileStore } from '../../excalidraw/types';
 import { isExcalidrawImageElement } from '../../util';
 
+// todo: remove isDeleted, and maybe others
 export const prepareContentForSave = (
   snapshot: InMemorySnapshot,
 ): DeepReadonly<ExcalidrawContent> => {
