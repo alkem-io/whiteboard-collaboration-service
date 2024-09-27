@@ -1,6 +1,7 @@
 import { arrayToMap } from './array.to.map';
 import { ExcalidrawElement } from '../../excalidraw/types';
 import { arrayToMapBy } from './array.to.map.by';
+import { Logger } from '@nestjs/common';
 // import { orderByFractionalIndex, syncInvalidIndices } from './fractionalIndex';
 
 const shouldDiscardRemoteElement = (
@@ -49,6 +50,8 @@ const shouldDiscardRemoteElement = (
   { leading: true, trailing: false },
 );*/
 
+const logger = new Logger('reconcileElements');
+
 export const reconcileElements = (
   localElements: readonly ExcalidrawElement[],
   remoteElements: readonly ExcalidrawElement[],
@@ -93,15 +96,21 @@ export const reconcileElements = (
 
   // de-duplicate indices
   // const syncedElemented = syncInvalidIndices(orderedElements);
-
-  // return orderedElements as ReconciledExcalidrawElement[];
-  // return reconciledElements;
-  return orderByPrecedingElement(reconciledElements);
+  try {
+    return orderByPrecedingElement(reconciledElements);
+  } catch (error) {
+    logger.error(error.message);
+    return reconciledElements;
+  }
 };
 
 const orderByPrecedingElement = (
   unOrderedElements: ExcalidrawElement[],
 ): ExcalidrawElement[] | never => {
+  // for zero or one element return the same array, as it's already sorted
+  if (unOrderedElements.length < 2) {
+    return unOrderedElements;
+  }
   // validated there is just one starting element
   const startElements = unOrderedElements.filter(
     (el) => el.__precedingElement__ === '^',
