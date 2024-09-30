@@ -28,14 +28,14 @@ export const reconcileFiles = (
      * so to accommodate this we store the file for future use
      */
     // if it's not found locally - check if it's used by any element
-    // const elementUsingTheFile = localElements.find(
-    //   (element) =>
-    //     isExcalidrawImageElement(element) && element.fileId === remoteFileId,
-    // );
-    // if it's not found locally and not used by any local element - discard the remote
-    // if (!elementUsingTheFile) {
-    //   continue;
-    // }
+    /*const elementUsingTheFile = localElements.find(
+      (element) =>
+        isExcalidrawImageElement(element) && element.fileId === remoteFileId,
+    );
+    if it's not found locally and not used by any local element - discard the remote
+    if (!elementUsingTheFile) {
+      continue;
+    }*/
     // if it's not found locally but used by a local element - add it to the list of reconciled files
     reconciledFileStore[remoteFileId] = remoteFileStore[remoteFileId];
   }

@@ -122,6 +122,7 @@ const orderByPrecedingElement = (
     );
   }
   // create a map of elements by <__precedingElement__, element that has this __precedingElement__ value>
+  // for easy access
   const elementMapByPrecedingKey = arrayToMapBy(
     unOrderedElements,
     '__precedingElement__',
