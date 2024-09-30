@@ -9,7 +9,7 @@ import {
   SaveInputData,
   WhoInputData,
 } from '../whiteboard-integration/inputs';
-import { ExcalidrawContent } from '../../excalidraw-backend/types';
+import { ExcalidrawContent } from '../../excalidraw/types';
 import { isFetchErrorData } from '../whiteboard-integration/outputs';
 import { excalidrawInitContent } from '../../util';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';

@@ -1,5 +1,7 @@
-import { ExcalidrawElement } from '../types';
 import { arrayToMap } from './array.to.map';
+import { ExcalidrawElement } from '../../excalidraw/types';
+import { arrayToMapBy } from './array.to.map.by';
+import { Logger } from '@nestjs/common';
 // import { orderByFractionalIndex, syncInvalidIndices } from './fractionalIndex';
 
 const shouldDiscardRemoteElement = (
@@ -48,6 +50,8 @@ const shouldDiscardRemoteElement = (
   { leading: true, trailing: false },
 );*/
 
+const logger = new Logger('reconcileElements');
+
 export const reconcileElements = (
   localElements: readonly ExcalidrawElement[],
   remoteElements: readonly ExcalidrawElement[],
@@ -83,8 +87,6 @@ export const reconcileElements = (
     }
   }
 
-  // const orderedElements = orderByFractionalIndex(reconciledElements);
-
   /**
    * todo: not sure how important is this and how does it affect the end result
    * since the debounce is set to 60 seconds, which might mean that the room has already closed
@@ -94,7 +96,53 @@ export const reconcileElements = (
 
   // de-duplicate indices
   // const syncedElemented = syncInvalidIndices(orderedElements);
+  try {
+    return orderByPrecedingElement(reconciledElements);
+  } catch (error) {
+    logger.error(error.message);
+    return reconciledElements;
+  }
+};
 
-  // return orderedElements as ReconciledExcalidrawElement[];
-  return reconciledElements;
+const orderByPrecedingElement = (
+  unOrderedElements: ExcalidrawElement[],
+): ExcalidrawElement[] | never => {
+  // for zero or one element return the same array, as it's already sorted
+  if (unOrderedElements.length < 2) {
+    return unOrderedElements;
+  }
+  // validated there is just one starting element
+  const startElements = unOrderedElements.filter(
+    (el) => el.__precedingElement__ === '^',
+  );
+
+  if (startElements.length !== 1) {
+    throw new Error(
+      `There must be exactly one element with __precedingElement__ = '^'`,
+    );
+  }
+  // create a map of elements by <__precedingElement__, element that has this __precedingElement__ value>
+  // for easy access
+  const elementMapByPrecedingKey = arrayToMapBy(
+    unOrderedElements,
+    '__precedingElement__',
+  );
+  const orderedElements: ExcalidrawElement[] = [];
+  // the array is starting with element that has no preceding element
+  let parentElement = startElements[0];
+  orderedElements.push(parentElement);
+  // Follow the chain of __precedingElement__
+  while (true) {
+    const childElement = elementMapByPrecedingKey.get(parentElement.id);
+
+    if (!childElement) {
+      // we have reached the end of the chain
+      break;
+    }
+
+    orderedElements.push(childElement);
+    parentElement = childElement;
+  }
+
+  return orderedElements;
 };

@@ -1,4 +1,4 @@
-import { ExcalidrawContent } from '../excalidraw-backend/types';
+import { ExcalidrawContent } from '../excalidraw/types';
 
 export const excalidrawInitContent: ExcalidrawContent = {
   appState: {},

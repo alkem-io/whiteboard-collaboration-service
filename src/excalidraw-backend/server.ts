@@ -17,8 +17,6 @@ import {
   defaultSaveInterval,
   DISCONNECT,
   DISCONNECTING,
-  ExcalidrawElement,
-  ExcalidrawFileStore,
   IDLE_STATE,
   INIT_ROOM,
   InMemorySnapshot,
@@ -47,6 +45,8 @@ import {
   disconnectEventHandler,
   disconnectingEventHandler,
   idleStateEventHandler,
+  isRoomId,
+  prepareContentForSave,
   serverBroadcastEventHandler,
   serverVolatileBroadcastEventHandler,
 } from './utils';
@@ -56,6 +56,7 @@ import { isAbortError, jsonToArrayBuffer } from '../util';
 import { ConfigType } from '../config';
 import { tryDecodeIncoming } from './utils/decode.incoming';
 import { SceneInitPayload, ServerBroadcastPayload } from './types/events';
+import { ExcalidrawElement, ExcalidrawFileStore } from '../excalidraw/types';
 import { isSaveErrorData } from '../services/whiteboard-integration/outputs';
 
 type RoomTrackers = Map<string, AbortController>;
@@ -106,7 +107,7 @@ export class Server {
     this.collaboratorInactivityMs =
       (collaborator_inactivity ?? defaultCollaboratorInactivity) * 1000;
 
-    this.saveIntervalMs = (save_interval ?? defaultSaveInterval) * 1000;
+    this.saveIntervalMs = save_interval ?? defaultSaveInterval;
   }
 
   private async fetchSocketsSafe(roomID: string) {
@@ -493,7 +494,7 @@ export class Server {
   }
   /**
    *  Creates a new throttled save function for a room and stores it in  __throttledSaveFnMap__.</br>
-   *  Called once after __wait__ milliseconds of the last received save request; Guaranteed save every __maxWait__ milliseconds;</br>
+   *  Called once immediately on the first invocation, then once after __wait__ milliseconds; Guaranteed save every __maxWait__ milliseconds;</br>
    *  To be used when the room is created, and used only for that room.</br>
    *  Use __cancelThrottledSave__ to cancel this function.</br>
    *  Use __flushThrottledSave__ to invoke this function immediately.
@@ -508,7 +509,7 @@ export class Server {
         this.notifyRoomSaved(roomId);
       },
       wait,
-      { leading: false, trailing: true },
+      { leading: true, trailing: true },
     );
     this.throttledSaveFnMap.set(roomId, throttledSave);
 
@@ -580,7 +581,8 @@ export class Server {
       return;
     }
 
-    const { data } = await this.utilService.save(roomId, snapshot.content);
+    const cleanContent = prepareContentForSave(snapshot);
+    const { data } = await this.utilService.save(roomId, cleanContent);
     if (isSaveErrorData(data)) {
       this.logger.error(`Failed to save room '${roomId}': ${data.error}`);
     } else {
@@ -588,5 +590,3 @@ export class Server {
     }
   }
 }
-// not that reliable, but best we can do
-const isRoomId = (id: string) => id.length === 36;

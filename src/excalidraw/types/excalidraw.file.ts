@@ -3,7 +3,8 @@ export type ExcalidrawFile = {
   id: string;
   created: number;
   lastRetrieved: number;
-  url: string;
+  url?: string;
+  dataURL: string;
 };
 
 export type ExcalidrawFileStore = {
