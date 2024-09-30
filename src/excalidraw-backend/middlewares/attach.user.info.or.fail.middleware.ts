@@ -3,7 +3,7 @@ import { WrappedMiddlewareHandler } from './middleware.handler.type';
 import { UserInfo } from '../../services/whiteboard-integration/user.info';
 import { SocketIoSocket } from '../types';
 
-export const attachUserInfoMiddleware: WrappedMiddlewareHandler =
+export const attachUserInfoOrFailMiddleware: WrappedMiddlewareHandler =
   (getter: (socket: SocketIoSocket) => Promise<UserInfo>) =>
   async (socket, next) => {
     try {

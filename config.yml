@@ -30,7 +30,7 @@ settings:
   # application level settings
   application:
     # queue
-    queue: ${QUEUE}:auth
+    queue: ${QUEUE}:alkemio-whiteboards
     # MILLISECONDS wait time for a response after a request on the message queue
     queue_response_timeout: ${QUEUE_RESPONSE_TIMEOUT}:10000
   # the collaboration experience
@@ -41,13 +41,9 @@ settings:
     # the window in which contributions are accepted to be counted towards a single contribution event;
     # time is in SECONDS
     contribution_window: ${CONTRIBUTION_WINDOW}:600
-    # SECONDS between auto saves
-    save_interval: ${AUTOSAVE_INTERVAL}:15
-    # SECONDS to wait for an acknowledgment that the save is successful, before retrying
-    save_timeout: ${AUTOSAVE_TIMEOUT}:20
-    # Amount of consecutive failed attempts to save before a collaborator is not picked for auto save
-    # This is useful when you want to avoid a lot of errors, or to mark a client not being reliable to save
-    save_consecutive_failed_attempts: ${SAVE_CONSECUTIVE_FAILED_ATTEMPTS}:5
+    # MILLISECONDS after the first change was made to the whiteboard before it's autosaved.
+    # This is preventing saving on every change - instead, all the changes done in the last interval are saved only once.
+    save_interval: ${AUTOSAVE_INTERVAL}:2000
     # SECONDS of inactivity before a collaborator is made view-only
     collaborator_inactivity: ${COLLABORATOR_INACTIVITY}:1800
     # how often the inactivity timer is reset;

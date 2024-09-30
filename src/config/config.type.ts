@@ -25,8 +25,6 @@ export interface ConfigType {
       port: number;
       contribution_window: number;
       save_interval: number;
-      save_timeout: number;
-      save_consecutive_failed_attempts: number;
       collaborator_inactivity: number;
       reset_collaborator_mode_debounce: number;
     };
