@@ -1,4 +1,4 @@
-export type RMQConnectionError = {
+export class RMQConnectionError {
   err: {
     stack: string;
     message: string;
@@ -11,4 +11,4 @@ export type RMQConnectionError = {
     port: number;
     heartbeat: number;
   };
-};
+}
