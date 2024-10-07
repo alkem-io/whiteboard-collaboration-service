@@ -180,7 +180,7 @@ export class Server {
       this.snapshots.delete(roomId);
     });
     adapter.on('error', (error: Error) => {
-      this.logger.error(error, error.stack);
+      this.logger.error(error, error?.stack);
     });
   }
 

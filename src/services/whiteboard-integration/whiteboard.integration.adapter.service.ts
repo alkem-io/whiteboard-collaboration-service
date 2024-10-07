@@ -69,7 +69,7 @@ export class WhiteboardIntegrationAdapterService {
         );
       })
       .catch((error: RMQConnectionError | undefined) =>
-        this.logger.error(error?.err, error?.err.stack),
+        this.logger.error(error, error?.err?.stack),
       );
 
     this.timeoutMs = this.configService.get(
@@ -82,17 +82,21 @@ export class WhiteboardIntegrationAdapterService {
     return this.sendWithResponse<UserInfo, WhoInputData>(
       WhiteboardIntegrationMessagePattern.WHO,
       data,
-    ).catch(() => ({
-      id: 'N/A',
-      email: 'N/A',
-    }));
+    ).catch((e) => {
+      this.logger.error(`Caught error in promise who`, e);
+      return {
+        id: 'N/A',
+        email: 'N/A',
+      };
+    });
   }
 
   public async info(data: InfoInputData) {
     return this.sendWithResponse<InfoOutputData, InfoInputData>(
       WhiteboardIntegrationMessagePattern.INFO,
       data,
-    ).catch(() => {
+    ).catch((e) => {
+      this.logger.error(`Caught error in promise info`, e);
       return {
         read: false,
         update: false,
@@ -130,6 +134,7 @@ export class WhiteboardIntegrationAdapterService {
         data,
       );
     } catch (e) {
+      this.logger.error(e, e?.stack);
       return new SaveOutputData(
         new SaveErrorData(e?.message ?? JSON.stringify(e)),
       );
@@ -143,6 +148,7 @@ export class WhiteboardIntegrationAdapterService {
         data,
       );
     } catch (e) {
+      this.logger.error(e, e?.stack);
       return new FetchOutputData(
         new FetchErrorData(e?.message ?? JSON.stringify(e)),
       );
@@ -204,7 +210,7 @@ export class WhiteboardIntegrationAdapterService {
             data,
             timeout: timeoutMs,
           },
-          error?.err.stack,
+          error?.err?.stack ?? error,
         );
 
         throw new Error('Error while processing integration request.');
