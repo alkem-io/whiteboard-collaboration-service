@@ -1,6 +1,6 @@
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import { Inject, Injectable, LoggerService } from '@nestjs/common';
-import { firstValueFrom, map, timeInterval, timeout } from 'rxjs';
+import { firstValueFrom, map, throwError, timeInterval, timeout } from 'rxjs';
 import {
   ClientProxy,
   ClientProxyFactory,
@@ -28,7 +28,7 @@ import { WhiteboardIntegrationEventPattern } from './event.pattern.enum';
 import { ConfigService } from '@nestjs/config';
 import { ConfigType } from '../../config';
 import { RmqOptions } from '@nestjs/microservices/interfaces/microservice-configuration.interface';
-import { RMQConnectionError } from './types';
+import { RMQConnectionError, OurTimeoutError } from './types';
 
 @Injectable()
 export class WhiteboardIntegrationAdapterService {
@@ -192,22 +192,83 @@ export class WhiteboardIntegrationAdapterService {
         });
         return x.value;
       }),
-      timeout({ each: timeoutMs }),
+      timeout({
+        each: timeoutMs,
+        with: () => throwError(() => new OurTimeoutError()),
+      }),
     );
 
     return firstValueFrom(result$).catch(
-      (error: RMQConnectionError | undefined) => {
-        this.logger.error(
-          {
-            message: `Error was received while waiting for response: ${error?.err?.message}`,
+      (
+        error:
+          | RMQConnectionError
+          | OurTimeoutError
+          | Error
+          | Record<string, unknown>
+          | undefined
+          | null,
+      ) => {
+        // null or undefined
+        if (error == undefined) {
+          this.logger.error({
+            message: `'${error}' error caught while processing integration request.`,
             pattern,
-            data,
             timeout: timeoutMs,
-          },
-          error?.err.stack,
-        );
+          });
 
-        throw new Error('Error while processing integration request.');
+          throw new Error(
+            `'${error}' error caught while processing integration request.`,
+          );
+        }
+
+        if (error instanceof OurTimeoutError) {
+          this.logger.error(
+            {
+              message: `Timeout was reached while waiting for response`,
+              pattern,
+              timeout: timeoutMs,
+            },
+            error.stack,
+          );
+
+          throw new Error('Timeout while processing integration request.');
+        } else if (error instanceof RMQConnectionError) {
+          this.logger.error(
+            {
+              message: `Error was received while waiting for response: ${error?.err?.message}`,
+              pattern,
+              timeout: timeoutMs,
+            },
+            error?.err?.stack,
+          );
+
+          throw new Error(
+            'RMQ connection error while processing integration request.',
+          );
+        } else if (error instanceof Error) {
+          this.logger.error(
+            {
+              message: `Error was received while waiting for response: ${error.message}`,
+              pattern,
+              timeout: timeoutMs,
+            },
+            error.stack,
+          );
+
+          throw new Error(
+            `${error.name} error while processing integration request.`,
+          );
+        } else {
+          this.logger.error({
+            message: `Unknown error was received while waiting for response: ${JSON.stringify(error, null, 2)}`,
+            pattern,
+            timeout: timeoutMs,
+          });
+
+          throw new Error(
+            `Unknown error while processing integration request.`,
+          );
+        }
       },
     );
   };
