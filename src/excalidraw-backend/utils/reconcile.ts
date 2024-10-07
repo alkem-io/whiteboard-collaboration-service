@@ -99,7 +99,7 @@ export const reconcileElements = (
   try {
     return orderByPrecedingElement(reconciledElements);
   } catch (error) {
-    logger.error(error.message);
+    logger.warn(`Element sorting failed with error: '${error.message}'`);
     return reconciledElements;
   }
 };
