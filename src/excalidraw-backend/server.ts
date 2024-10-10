@@ -505,8 +505,11 @@ export class Server {
   ): ThrottledSaveFunction {
     const throttledSave = throttle(
       async (roomId: string) => {
-        await this.saveRoom(roomId);
-        this.notifyRoomSaved(roomId);
+        const hasSaved = await this.saveRoom(roomId);
+
+        if (hasSaved) {
+          this.notifyRoomSaved(roomId);
+        }
       },
       wait,
       { leading: true, trailing: true },
@@ -572,21 +575,23 @@ export class Server {
     return snapshotContent;
   }
 
-  private async saveRoom(roomId: string) {
+  private async saveRoom(roomId: string): Promise<boolean> {
     const snapshot = this.snapshots.get(roomId);
     if (!snapshot) {
       this.logger.error(
         `No snapshot found for room '${roomId}' in the local storage!`,
       );
-      return;
+      return false;
     }
 
     const cleanContent = prepareContentForSave(snapshot);
     const { data } = await this.utilService.save(roomId, cleanContent);
     if (isSaveErrorData(data)) {
       this.logger.error(`Failed to save room '${roomId}': ${data.error}`);
+      return false;
     } else {
       this.logger.verbose?.(`Room '${roomId}' saved successfully`);
+      return true;
     }
   }
 }
