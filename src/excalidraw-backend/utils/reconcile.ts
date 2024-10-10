@@ -140,8 +140,15 @@ const tryOrderByPrecedingElement = (
   // the array is starting with element that has no preceding element
   let parentElement = startElements[0];
   orderedElements.push(parentElement);
+  // keep track of visited elements to prevent cycles
+  const visitedElements = new Set<string>();
   // Follow the chain of __precedingElement__ until we have sorted all
   while (orderedElements.length != unOrderedElements.length) {
+    // prevent cycles in the chain
+    if (visitedElements.has(parentElement.id)) {
+      throw new Error('Cycle detected in __precedingElement__ chain');
+    }
+    visitedElements.add(parentElement.id);
     // a child of a parent, is an element which __precedingElement__ is pointing to the parent
     // is there an element which preceding element is the parent element
     const childElement = elementMapByPrecedingKey.get(parentElement.id);
