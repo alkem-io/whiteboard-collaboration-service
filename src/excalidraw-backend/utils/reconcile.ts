@@ -6,14 +6,19 @@ const shouldDiscardRemoteElement = (
   local: ExcalidrawElement | undefined,
   remote: ExcalidrawElement,
 ): boolean => {
-  return !!(
-    local &&
-    // local element is newer
-    (local.version > remote.version ||
-      // resolve conflicting edits deterministically by taking the one with
-      // the lowest versionNonce
-      (local.version === remote.version &&
-        local.versionNonce < remote.versionNonce))
+  // there is no local element; use remote
+  if (!local) {
+    return false;
+  }
+  // local element is newer; use local
+  if (local.version > remote.version) {
+    return true;
+  }
+  // if version are equal
+  // resolve conflicts deterministically by taking the one with
+  // the lowest versionNonce
+  return (
+    local.version === remote.version && local.versionNonce < remote.versionNonce
   );
 };
 
@@ -23,33 +28,42 @@ export const reconcileElements = (
 ): ExcalidrawElement[] => {
   const localElementsMap = arrayToMap(localElements);
   const reconciledElements: ExcalidrawElement[] = [];
-  const added = new Set<string>();
+  // keep track of elements that have been reconciled
+  const reconciled = new Set<string>();
 
   // process remote elements
   for (const remoteElement of remoteElements) {
-    if (!added.has(remoteElement.id)) {
-      const localElement = localElementsMap.get(remoteElement.id);
-      const discardRemoteElement = shouldDiscardRemoteElement(
-        localElement,
-        remoteElement,
-      );
+    // skip if already reconciled
+    if (reconciled.has(remoteElement.id)) {
+      continue;
+    }
 
-      if (localElement && discardRemoteElement) {
-        reconciledElements.push(localElement);
-        added.add(localElement.id);
-      } else {
-        reconciledElements.push(remoteElement);
-        added.add(remoteElement.id);
-      }
+    const localElement = localElementsMap.get(remoteElement.id);
+    // should discard remote in favor of local
+    const discardRemoteElement = shouldDiscardRemoteElement(
+      localElement,
+      remoteElement,
+    );
+
+    if (localElement && discardRemoteElement) {
+      reconciledElements.push(localElement);
+      reconciled.add(localElement.id);
+    } else {
+      reconciledElements.push(remoteElement);
+      reconciled.add(remoteElement.id);
     }
   }
 
   // process remaining local elements
   for (const localElement of localElements) {
-    if (!added.has(localElement.id)) {
-      reconciledElements.push(localElement);
-      added.add(localElement.id);
+    // skip if already reconciled
+    if (reconciled.has(localElement.id)) {
+      continue;
     }
+
+    reconciledElements.push(localElement);
+    // add for completeness
+    reconciled.add(localElement.id);
   }
 
   // de-duplicate indices - leave this to the clients
