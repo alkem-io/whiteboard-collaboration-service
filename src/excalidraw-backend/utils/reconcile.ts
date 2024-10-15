@@ -2,6 +2,15 @@ import { arrayToMap } from './array.to.map';
 import { ExcalidrawElement } from '../../excalidraw/types';
 import { orderByFractionalIndex } from './fractionalIndex';
 
+/**
+ * Decides by comparison if the remote or local version of the same element must be preferred.
+ * If there is no local version of the element - prefer the remote.
+ * If the version of the remote element is higher - prefer the remote
+ * if both versions are the same - prefer the element with the lowest __versionNonce__ (at random)
+ *
+ * @param local
+ * @param remote
+ */
 const shouldDiscardRemoteElement = (
   local: ExcalidrawElement | undefined,
   remote: ExcalidrawElement,
