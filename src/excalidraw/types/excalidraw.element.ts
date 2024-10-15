@@ -18,7 +18,7 @@ export type ExcalidrawImageElement = ExcalidrawBaseElement & {
 
 export type ExcalidrawElement = ExcalidrawBaseElement | ExcalidrawImageElement;
 
-export type FractionalIndex = string & { _brand: 'franctionalIndex' };
+export type FractionalIndex = string & { _brand: 'fractionalIndex' };
 export type Ordered<TElement extends ExcalidrawElement> = TElement & {
   index: FractionalIndex;
 };
