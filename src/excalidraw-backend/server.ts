@@ -512,7 +512,7 @@ export class Server {
         }
       },
       wait,
-      { leading: true, trailing: true },
+      { leading: false, trailing: true },
     );
     this.throttledSaveFnMap.set(roomId, throttledSave);
 
