@@ -4,13 +4,11 @@ type ExcalidrawBaseElement = {
   type: string; // many types
   version: number;
   versionNonce: number;
-  /**
-   *  used for sorting the array;
-   *  Excalidraw uses a sorted array to simulate z-index behavior by
-   *  drawing the elements in order, starting from the first element
-   *  TODO: to be removed once we update the version of Excalidraw, where they are removing this field and introduce a new field called "index"
-   */
-  __precedingElement__: string;
+  /** String in a fractional form defined by https://github.com/rocicorp/fractional-indexing.
+   Used for ordering in multiplayer scenarios, such as during reconciliation or undo / redo.
+   Always kept in sync with the array order by `syncMovedIndices` and `syncInvalidIndices`.
+   Could be null, i.e. for new elements which were not yet assigned to the scene. */
+  index: FractionalIndex | null;
 };
 
 export type ExcalidrawImageElement = ExcalidrawBaseElement & {
@@ -19,3 +17,9 @@ export type ExcalidrawImageElement = ExcalidrawBaseElement & {
 };
 
 export type ExcalidrawElement = ExcalidrawBaseElement | ExcalidrawImageElement;
+
+export type FractionalIndex = string & { _brand: 'fractionalIndex' };
+export type Ordered<TElement extends ExcalidrawElement> = TElement & {
+  index: FractionalIndex;
+};
+export type OrderedExcalidrawElement = Ordered<ExcalidrawElement>;
