@@ -58,6 +58,8 @@ import { tryDecodeIncoming } from './utils/decode.incoming';
 import { SceneInitPayload, ServerBroadcastPayload } from './types/events';
 import { ExcalidrawElement, ExcalidrawFileStore } from '../excalidraw/types';
 import { isSaveErrorData } from '../services/whiteboard-integration/outputs';
+import { detectChanges } from '../util/detect.changes';
+import { ElasticsearchService } from '../services/elasticsearch/elasticsearch.service';
 
 type RoomTrackers = Map<string, AbortController>;
 type SocketTrackers = Map<string, AbortController>;
@@ -85,6 +87,7 @@ export class Server {
   constructor(
     @Inject(WINSTON_MODULE_NEST_PROVIDER) private logger: LoggerService,
     private readonly utilService: UtilService,
+    private readonly elasticService: ElasticsearchService,
     private readonly configService: ConfigService<ConfigType, true>,
   ) {
     const port = this.configService.get('settings.collaboration.port', {
@@ -254,6 +257,15 @@ export class Server {
                 return;
               }
 
+              this.reportChanges(
+                roomID,
+                socket.data.userInfo.email,
+                (this.snapshots.get(roomID)?.content.elements ?? []).filter(
+                  (x) => !x.isDeleted,
+                ) as ExcalidrawElement[],
+                eventData.payload.elements as ExcalidrawElement[],
+              );
+
               this.createAndStoreLatestSnapshot(
                 roomID,
                 eventData.payload.elements,
@@ -347,13 +359,13 @@ export class Server {
     remoteElements: readonly ExcalidrawElement[],
     remoteFileStore: DeepReadonly<ExcalidrawFileStore>,
   ) {
-    const snapshot = this.snapshots.get(roomId);
-    if (!snapshot) {
+    const oldSnapshot = this.snapshots.get(roomId);
+    if (!oldSnapshot) {
       return;
     }
 
     const reconciledSnapshot = InMemorySnapshot.reconcile(
-      snapshot,
+      oldSnapshot,
       remoteElements,
       remoteFileStore,
     );
@@ -593,5 +605,23 @@ export class Server {
       this.logger.verbose?.(`Room '${roomId}' saved successfully`);
       return true;
     }
+  }
+
+  private reportChanges(
+    roomId: string,
+    createdBy: string,
+    oldEl: ExcalidrawElement[],
+    newEl: ExcalidrawElement[],
+  ) {
+    const changes = detectChanges(oldEl, newEl, [
+      'version',
+      'versionNonce',
+      'updated',
+    ]);
+    if (!changes) {
+      return;
+    }
+
+    this.elasticService.sendWhiteboardChangeEvent(roomId, createdBy, changes);
   }
 }

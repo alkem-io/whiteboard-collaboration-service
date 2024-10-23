@@ -25,6 +25,18 @@ monitoring:
     # The logging format will be in json - useful for parsing
     # if disabled - will be in a human-readable form
     json: ${LOGGING_FORMAT_JSON}:false
+  elasticsearch:
+    host: ${ELASTICSEARCH_URL}
+    api_key: ${ELASTICSEARCH_API_KEY}
+    retries: ${ELASTICSEARCH_RETRIES}:3
+    timeout: ${ELASTICSEARCH_TIMEOUT}:30000
+    tls:
+      ca_cert_path: ${ELASTIC_TLS_CA_CERT_PATH}:none
+      rejectUnauthorized: ${ELASTIC_TLS_REJECT_UNAUTHORIZED}:false
+    indices:
+      #
+      whiteboard_events: ${ELASTICSEARCH_INDEX_WHITEBOARD_EVENTS}:whiteboard-change-events
+
 
 settings:
   # application level settings

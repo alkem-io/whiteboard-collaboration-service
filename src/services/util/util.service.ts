@@ -1,4 +1,6 @@
 import { Inject, Injectable, LoggerService } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { Client as ElasticClient } from '@elastic/elasticsearch';
 import { WhiteboardIntegrationService } from '../whiteboard-integration/whiteboard.integration.service';
 import { UserInfo } from '../whiteboard-integration/user.info';
 import {
@@ -9,11 +11,12 @@ import {
   SaveInputData,
   WhoInputData,
 } from '../whiteboard-integration/inputs';
-import { ExcalidrawContent } from '../../excalidraw/types';
-import { isFetchErrorData } from '../whiteboard-integration/outputs';
+import { ExcalidrawContent, ExcalidrawElement } from '../../excalidraw/types';
 import { excalidrawInitContent } from '../../util';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import { DeepReadonly } from '../../excalidraw-backend/utils';
+import { isFetchErrorData } from '../whiteboard-integration/outputs';
+import { DetectedChanges } from '../../util/detect.changes';
 
 @Injectable()
 export class UtilService {

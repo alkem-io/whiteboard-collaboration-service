@@ -14,6 +14,19 @@ export interface ConfigType {
       level: string;
       json: boolean;
     };
+    elasticsearch: {
+      host: string;
+      api_key: string;
+      retries: number;
+      timeout: number;
+      indices: {
+        whiteboard_events: string;
+      };
+      tls: {
+        ca_cert_path: string | 'none';
+        rejectUnauthorized: boolean;
+      };
+    };
   };
   settings: {
     application: {
