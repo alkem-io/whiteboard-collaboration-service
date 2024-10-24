@@ -38,9 +38,9 @@ monitoring:
       # The index responsible for tracking the whiteboard events happening in a particular session
       whiteboard_event_index: ${ELASTICSEARCH_INDEX_WHITEBOARD_EVENTS}:whiteboard-change-events
       # The amount of logged information
-      # 0 - None = disabled;
-      # 1 - Lite = user + event type;
-      # 2 - Full = user + event type + delta of what was changed
+      # None = disabled;
+      # Lite = user + event type;
+      # Full = user + event type + delta of what was changed
       mode: ${WHITEBOARD_EVENTS_LOGGING_MODE}:none
       # MILLISECONDS of how long are the events buffered in memory before being sent
       interval: ${WHITEBOARD_EVENTS_LOGGING_INTERVAL}:3000

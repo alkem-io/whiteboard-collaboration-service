@@ -17,7 +17,6 @@ type Changes<T extends Identifiable> = {
 export type DetectedChanges<T extends Identifiable> = {
   inserted?: Array<T>;
   updated?: Array<Changes<T>>;
-  // todo: how to detect deleted?
   deleted?: Array<{
     id: string;
   }>;
@@ -96,6 +95,9 @@ export const detectChanges = (
         continue;
       }
       updatedFields[typedKey] = {
+        // TS2322: Type string | number | boolean | any[] | FractionalIndex | null
+        // is not assignable to type undefined
+        // Type null is not assignable to type undefined
         // @ts-expect-error updatedFields[typedKey] can be of undefined type and assigning another type to it brings a type error
         old: oldItem[typedKey],
         // @ts-expect-error same

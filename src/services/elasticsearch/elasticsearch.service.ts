@@ -2,7 +2,6 @@ import { Inject, Injectable, LoggerService } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import { throttle } from 'lodash';
-import { randomUUID } from 'crypto';
 import { Client as ElasticClient } from '@elastic/elasticsearch';
 import { ErrorCause } from '@elastic/elasticsearch/lib/api/types';
 import {
@@ -10,11 +9,7 @@ import {
   DetectedChangesType,
 } from '../../util/detect.changes';
 import { ExcalidrawElement } from '../../excalidraw/types';
-import {
-  ELASTICSEARCH_CLIENT_PROVIDER,
-  isElasticError,
-  isElasticResponseError,
-} from '../../elasticsearch-client';
+import { ELASTICSEARCH_CLIENT_PROVIDER } from '../../elasticsearch-client';
 import {
   ConfigType,
   WhiteboardEventLoggingMode,
@@ -63,25 +58,9 @@ export class ElasticsearchService {
     this.eventLoggingMode = eventsConfig.mode;
 
     this.sendDataThrottled = throttle(
-      this._sendWhiteboardChangeEvent,
+      this._sendWhiteboardChangeEvent.bind(this),
       eventsConfig.interval,
     );
-  }
-
-  public sendWhiteboardChangeEventType(
-    roomId: string,
-    createdBy: string,
-    types: DetectedChangesType[],
-  ) {
-    const lightDocument: LightChangeEventDocument = {
-      '@timestamp': new Date(),
-      whiteboardId: roomId,
-      createdBy,
-      types,
-    };
-
-    this.dataToSend.push(lightDocument);
-    this.sendDataThrottled();
   }
 
   public sendWhiteboardChangeEvent(
@@ -165,44 +144,6 @@ export class ElasticsearchService {
     } else {
       this.logger.verbose?.(`[${index}] - ${data.length} documents indexed`);
     }
-  }
-
-  private handleError(error: unknown) {
-    const errorId = randomUUID();
-    const baseParams = {
-      uuid: errorId,
-    };
-
-    if (isElasticResponseError(error)) {
-      this.logger.error(
-        {
-          ...baseParams,
-          message: error.message,
-          name: error.name,
-          status: error.meta.statusCode,
-        },
-        error?.stack,
-      );
-    } else if (isElasticError(error)) {
-      this.logger.error({
-        ...baseParams,
-        type: error.error.type,
-        status: error.status,
-      });
-    } else if (error instanceof Error) {
-      this.logger.error(
-        {
-          ...baseParams,
-          message: error.message,
-          name: error.name,
-        },
-        error?.stack,
-      );
-    } else {
-      this.logger.error({ ...baseParams, error });
-    }
-
-    return errorId;
   }
 
   private eventType(changes: DetectedChanges<any>): DetectedChangesType[] {
