@@ -260,9 +260,8 @@ export class Server {
               this.reportChanges(
                 roomID,
                 socket.data.userInfo.email,
-                (this.snapshots.get(roomID)?.content.elements ?? []).filter(
-                  (x) => !x.isDeleted,
-                ) as ExcalidrawElement[],
+                (this.snapshots.get(roomID)?.content.elements ??
+                  []) as ExcalidrawElement[],
                 eventData.payload.elements as ExcalidrawElement[],
               );
 
@@ -617,6 +616,7 @@ export class Server {
       'version',
       'versionNonce',
       'updated',
+      'boundElements',
     ]);
     if (!changes) {
       return;

@@ -72,6 +72,10 @@ export const detectChanges = (
       continue;
     }
     // a match is found - the element is updated or deleted
+    // if both are deleted - ignore
+    if (oldItem.isDeleted && newItem.isDeleted) {
+      continue;
+    }
     // if the new item is deleted, it is considered deleted
     if (newItem.isDeleted) {
       changes.deleted = changes.deleted ?? [];

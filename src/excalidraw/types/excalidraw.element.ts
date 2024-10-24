@@ -12,6 +12,7 @@ type ExcalidrawBaseElement = {
   /** epoch (ms) timestamp of last element update */
   updated: number;
   isDeleted: boolean;
+  boundElements: any[] | null;
 };
 
 export type ExcalidrawImageElement = ExcalidrawBaseElement & {

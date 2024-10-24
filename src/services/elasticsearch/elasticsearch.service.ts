@@ -24,7 +24,8 @@ type ErroredDocument = {
 type WhiteboardChangeEventDocument = DetectedChanges<ExcalidrawElement> & {
   '@timestamp': Date;
   createdBy: string;
-  roomId: string;
+  whiteboardId: string;
+  type: 'insert' | 'update' | 'delete' | 'unknown';
 };
 @Injectable()
 export class ElasticsearchService {
@@ -56,37 +57,15 @@ export class ElasticsearchService {
   ) {
     this.dataToSend.push({
       '@timestamp': new Date(),
-      roomId,
+      whiteboardId: roomId,
       createdBy,
+      type: this.eventType(changes),
       ...changes,
     });
     this.sendDataThrottled();
   }
 
   private async _sendWhiteboardChangeEvent() {
-    // const data = this.dataToSend.map((x) => {
-    //   const inserted = x.inserted
-    //     ? arrayToObjectByKey(x.inserted, 'id')
-    //     : undefined;
-    //   const updated = x.updated
-    //     ? arrayToObjectByKey(x.updated, 'id')
-    //     : undefined;
-    //   const deleted = x.deleted?.reduce(
-    //     (acc, item) => {
-    //       acc[item.id] = true;
-    //       return acc;
-    //     },
-    //     {} as Record<string, true>,
-    //   );
-    //
-    //   return {
-    //     '@timestamp': x['@timestamp'],
-    //     inserted,
-    //     updated,
-    //     deleted,
-    //   };
-    // });
-    // const result = await this.ingestBulk(data, this.eventIndexName);
     const result = await this.ingestBulk(this.dataToSend, this.eventIndexName);
 
     this.dataToSend.length = 0;
@@ -107,14 +86,6 @@ export class ElasticsearchService {
       { create: { _index: index } },
       doc,
     ]);
-    // try {
-    //   await this.elasticClient.indices.createDataStream({
-    //     name: index,
-    //     error_trace: true,
-    //   });
-    // } catch (e) {
-    //   this.logger.error(e);
-    // }
 
     const bulkResponse = await this.elasticClient.bulk({ operations });
 
@@ -184,17 +155,22 @@ export class ElasticsearchService {
 
     return errorId;
   }
-}
 
-function arrayToObjectByKey<T extends Record<string, any>, K extends keyof T>(
-  array: T[],
-  key: K,
-): Record<string, T> {
-  return array.reduce(
-    (acc, item) => {
-      acc[item[key]] = item;
-      return acc;
-    },
-    {} as Record<string, T>,
-  );
+  private eventType(
+    changes: DetectedChanges<any>,
+  ): WhiteboardChangeEventDocument['type'] {
+    if (changes.updated) {
+      return 'update';
+    }
+
+    if (changes.inserted) {
+      return 'insert';
+    }
+
+    if (changes.deleted) {
+      return 'delete';
+    }
+
+    return 'unknown';
+  }
 }
