@@ -58,8 +58,6 @@ import { tryDecodeIncoming } from './utils/decode.incoming';
 import { SceneInitPayload, ServerBroadcastPayload } from './types/events';
 import { ExcalidrawElement, ExcalidrawFileStore } from '../excalidraw/types';
 import { isSaveErrorData } from '../services/whiteboard-integration/outputs';
-import { detectChanges } from '../util/detect.changes';
-import { ElasticsearchService } from '../services/elasticsearch/elasticsearch.service';
 
 type RoomTrackers = Map<string, AbortController>;
 type SocketTrackers = Map<string, AbortController>;
