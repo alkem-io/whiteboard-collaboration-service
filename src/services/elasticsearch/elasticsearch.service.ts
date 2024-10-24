@@ -7,7 +7,7 @@ import { ErrorCause } from '@elastic/elasticsearch/lib/api/types';
 import {
   DetectedChanges,
   DetectedChangesType,
-} from '../../util/detect.changes';
+} from '../../util/detect-changes/detect.changes';
 import { ExcalidrawElement } from '../../excalidraw/types';
 import { ELASTICSEARCH_CLIENT_PROVIDER } from '../../elasticsearch-client';
 import {
@@ -30,12 +30,12 @@ type BaseChangeEventDocument = {
   types: DetectedChangesType[];
 };
 
-type LightChangeEventDocument = BaseChangeEventDocument;
+type LiteChangeEventDocument = BaseChangeEventDocument;
 type FullChangeEventDocument = BaseChangeEventDocument &
   DetectedChanges<ExcalidrawElement>;
 
 type WhiteboardChangeEventDocument =
-  | LightChangeEventDocument
+  | LiteChangeEventDocument
   | FullChangeEventDocument;
 
 @Injectable()
@@ -58,7 +58,7 @@ export class ElasticsearchService {
     this.eventLoggingMode = eventsConfig.mode;
 
     this.sendDataThrottled = throttle(
-      this._sendWhiteboardChangeEvent.bind(this),
+      this.sendBufferedEventData.bind(this),
       eventsConfig.interval,
     );
   }
@@ -67,7 +67,7 @@ export class ElasticsearchService {
     roomId: string,
     createdBy: string,
     changes: DetectedChanges<ExcalidrawElement>,
-  ) {
+  ): void {
     if (this.eventLoggingMode === WhiteboardEventLoggingMode.none) {
       return;
     }
@@ -93,12 +93,9 @@ export class ElasticsearchService {
     this.sendDataThrottled();
   }
 
-  private async _sendWhiteboardChangeEvent() {
-    const result = await this.ingestBulk(this.dataToSend, this.eventIndex);
-
+  private async sendBufferedEventData(): Promise<void> {
+    await this.ingestBulk(this.dataToSend, this.eventIndex);
     this.dataToSend.length = 0;
-
-    return result;
   }
 
   private async ingestBulk(data: unknown[], index: string): Promise<void> {
@@ -150,17 +147,17 @@ export class ElasticsearchService {
     const types: DetectedChangesType[] = [];
 
     if (changes.inserted) {
-      types.push('insert');
+      types.push(DetectedChangesType.inserted);
     }
 
     if (changes.updated) {
-      types.push('update');
+      types.push(DetectedChangesType.updated);
     }
 
     if (changes.deleted) {
-      types.push('delete');
+      types.push(DetectedChangesType.deleted);
     }
 
-    return types.length > 0 ? types : ['unknown'];
+    return types.length > 0 ? types : [DetectedChangesType.unknown];
   }
 }

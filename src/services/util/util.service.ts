@@ -15,7 +15,7 @@ import { ExcalidrawContent, ExcalidrawElement } from '../../excalidraw/types';
 import { excalidrawInitContent } from '../../util';
 import { DeepReadonly } from '../../excalidraw-backend/utils';
 import { isFetchErrorData } from '../whiteboard-integration/outputs';
-import { detectChanges } from '../../util/detect.changes';
+import { detectChanges } from '../../util/detect-changes/detect.changes';
 import { ElasticsearchService } from '../elasticsearch/elasticsearch.service';
 import {
   ConfigType,

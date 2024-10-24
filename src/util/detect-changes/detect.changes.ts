@@ -1,5 +1,5 @@
 import { isEqual } from 'lodash';
-import { ExcalidrawElement } from '../excalidraw/types';
+import { ExcalidrawElement } from '../../excalidraw/types';
 
 type Identifiable = {
   id: string;
@@ -22,9 +22,13 @@ export type DetectedChanges<T extends Identifiable> = {
   }>;
 };
 
-export type DetectedChangesType = 'insert' | 'update' | 'delete' | 'unknown';
+export const enum DetectedChangesType {
+  inserted = 'inserted',
+  updated = 'updated',
+  deleted = 'deleted',
+  unknown = 'unknown',
+}
 
-// todo: doc
 /**
  * Detects deep changes between two arrays of ExcalidrawElements, and returns an object with the changes.
  * Returns null if no changes are detected.
