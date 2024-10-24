@@ -5,14 +5,21 @@ import { throttle } from 'lodash';
 import { randomUUID } from 'crypto';
 import { Client as ElasticClient } from '@elastic/elasticsearch';
 import { ErrorCause } from '@elastic/elasticsearch/lib/api/types';
-import { DetectedChanges } from '../../util/detect.changes';
+import {
+  DetectedChanges,
+  DetectedChangesType,
+} from '../../util/detect.changes';
 import { ExcalidrawElement } from '../../excalidraw/types';
 import {
   ELASTICSEARCH_CLIENT_PROVIDER,
   isElasticError,
   isElasticResponseError,
 } from '../../elasticsearch-client';
-import { ConfigType } from '../../config';
+import {
+  ConfigType,
+  WhiteboardEventLoggingMode,
+  WhiteboardEventLoggingModeType,
+} from '../../config';
 
 type ErroredDocument = {
   status: number | undefined;
@@ -21,20 +28,27 @@ type ErroredDocument = {
   document: unknown;
 };
 
-type WhiteboardChangeEventDocument = DetectedChanges<ExcalidrawElement> & {
+type BaseChangeEventDocument = {
   '@timestamp': Date;
   createdBy: string;
   whiteboardId: string;
-  type: 'insert' | 'update' | 'delete' | 'unknown';
+  types: DetectedChangesType[];
 };
+
+type LightChangeEventDocument = BaseChangeEventDocument;
+type FullChangeEventDocument = BaseChangeEventDocument &
+  DetectedChanges<ExcalidrawElement>;
+
+type WhiteboardChangeEventDocument =
+  | LightChangeEventDocument
+  | FullChangeEventDocument;
+
 @Injectable()
 export class ElasticsearchService {
-  private readonly sendDataThrottled = throttle(
-    this._sendWhiteboardChangeEvent,
-    3000,
-  );
+  private readonly sendDataThrottled;
   private readonly dataToSend: WhiteboardChangeEventDocument[] = [];
-  private readonly eventIndexName: string;
+  private readonly eventIndex: string;
+  private readonly eventLoggingMode: WhiteboardEventLoggingModeType;
 
   constructor(
     @Inject(WINSTON_MODULE_NEST_PROVIDER) private logger: LoggerService,
@@ -42,31 +56,66 @@ export class ElasticsearchService {
     private readonly elasticClient: ElasticClient | undefined,
     private readonly configService: ConfigService<ConfigType, true>,
   ) {
-    this.eventIndexName = this.configService.get(
-      'monitoring.elasticsearch.indices.whiteboard_events',
-      {
-        infer: true,
-      },
+    const eventsConfig = this.configService.get('monitoring.logging.events', {
+      infer: true,
+    });
+    this.eventIndex = eventsConfig.whiteboard_event_index;
+    this.eventLoggingMode = eventsConfig.mode;
+
+    this.sendDataThrottled = throttle(
+      this._sendWhiteboardChangeEvent,
+      eventsConfig.interval,
     );
   }
 
-  public async sendWhiteboardChangeEvent(
+  public sendWhiteboardChangeEventType(
+    roomId: string,
+    createdBy: string,
+    types: DetectedChangesType[],
+  ) {
+    const lightDocument: LightChangeEventDocument = {
+      '@timestamp': new Date(),
+      whiteboardId: roomId,
+      createdBy,
+      types,
+    };
+
+    this.dataToSend.push(lightDocument);
+    this.sendDataThrottled();
+  }
+
+  public sendWhiteboardChangeEvent(
     roomId: string,
     createdBy: string,
     changes: DetectedChanges<ExcalidrawElement>,
   ) {
-    this.dataToSend.push({
+    if (this.eventLoggingMode === WhiteboardEventLoggingMode.none) {
+      return;
+    }
+
+    const baseDocument: BaseChangeEventDocument = {
       '@timestamp': new Date(),
       whiteboardId: roomId,
       createdBy,
-      type: this.eventType(changes),
-      ...changes,
-    });
+      types: this.eventType(changes),
+    };
+
+    if (this.eventLoggingMode === WhiteboardEventLoggingMode.lite) {
+      this.dataToSend.push(baseDocument);
+    }
+
+    if (this.eventLoggingMode === WhiteboardEventLoggingMode.full) {
+      this.dataToSend.push({
+        ...baseDocument,
+        ...changes,
+      });
+    }
+
     this.sendDataThrottled();
   }
 
   private async _sendWhiteboardChangeEvent() {
-    const result = await this.ingestBulk(this.dataToSend, this.eventIndexName);
+    const result = await this.ingestBulk(this.dataToSend, this.eventIndex);
 
     this.dataToSend.length = 0;
 
@@ -156,21 +205,21 @@ export class ElasticsearchService {
     return errorId;
   }
 
-  private eventType(
-    changes: DetectedChanges<any>,
-  ): WhiteboardChangeEventDocument['type'] {
-    if (changes.updated) {
-      return 'update';
-    }
+  private eventType(changes: DetectedChanges<any>): DetectedChangesType[] {
+    const types: DetectedChangesType[] = [];
 
     if (changes.inserted) {
-      return 'insert';
+      types.push('insert');
+    }
+
+    if (changes.updated) {
+      types.push('update');
     }
 
     if (changes.deleted) {
-      return 'delete';
+      types.push('delete');
     }
 
-    return 'unknown';
+    return types.length > 0 ? types : ['unknown'];
   }
 }

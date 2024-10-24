@@ -23,6 +23,8 @@ export type DetectedChanges<T extends Identifiable> = {
   }>;
 };
 
+export type DetectedChangesType = 'insert' | 'update' | 'delete' | 'unknown';
+
 // todo: doc
 /**
  * Detects deep changes between two arrays of ExcalidrawElements, and returns an object with the changes.

@@ -1,3 +1,5 @@
+import { WhiteboardEventLoggingModeType } from './whiteboard.event.logging.mode';
+
 export interface ConfigType {
   rabbitmq: {
     connection: {
@@ -8,23 +10,28 @@ export interface ConfigType {
       heartbeat: number;
     };
   };
+  elasticsearch: {
+    host: string;
+    api_key: string;
+    retries: number;
+    timeout: number;
+    tls: {
+      ca_cert_path: string | 'none';
+      rejectUnauthorized: boolean;
+    };
+    indices: {
+      whiteboard_events: string;
+    };
+  };
   monitoring: {
     logging: {
       enabled: boolean;
       level: string;
       json: boolean;
-    };
-    elasticsearch: {
-      host: string;
-      api_key: string;
-      retries: number;
-      timeout: number;
-      indices: {
-        whiteboard_events: string;
-      };
-      tls: {
-        ca_cert_path: string | 'none';
-        rejectUnauthorized: boolean;
+      events: {
+        whiteboard_event_index: string;
+        interval: number;
+        mode: WhiteboardEventLoggingModeType;
       };
     };
   };

@@ -8,11 +8,13 @@ export const elasticSearchClientFactory = async (
   logger: LoggerService,
   configService: ConfigService<ConfigType, true>,
 ): Promise<Client | undefined> => {
-  const elasticsearch = configService.get('monitoring.elasticsearch', {
-    infer: true,
-  });
+  const { host, retries, timeout, api_key, tls } = configService.get(
+    'elasticsearch',
+    {
+      infer: true,
+    },
+  );
 
-  const { host, retries, timeout, api_key, tls } = elasticsearch;
   const rejectUnauthorized = tls.rejectUnauthorized ?? false;
   let tlsOptions;
 

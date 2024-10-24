@@ -87,7 +87,6 @@ export class Server {
   constructor(
     @Inject(WINSTON_MODULE_NEST_PROVIDER) private logger: LoggerService,
     private readonly utilService: UtilService,
-    private readonly elasticService: ElasticsearchService,
     private readonly configService: ConfigService<ConfigType, true>,
   ) {
     const port = this.configService.get('settings.collaboration.port', {
@@ -257,7 +256,7 @@ export class Server {
                 return;
               }
 
-              this.reportChanges(
+              this.utilService.reportChanges(
                 roomID,
                 socket.data.userInfo.email,
                 (this.snapshots.get(roomID)?.content.elements ??
@@ -604,24 +603,5 @@ export class Server {
       this.logger.verbose?.(`Room '${roomId}' saved successfully`);
       return true;
     }
-  }
-
-  private reportChanges(
-    roomId: string,
-    createdBy: string,
-    oldEl: ExcalidrawElement[],
-    newEl: ExcalidrawElement[],
-  ) {
-    const changes = detectChanges(oldEl, newEl, [
-      'version',
-      'versionNonce',
-      'updated',
-      'boundElements',
-    ]);
-    if (!changes) {
-      return;
-    }
-
-    this.elasticService.sendWhiteboardChangeEvent(roomId, createdBy, changes);
   }
 }
