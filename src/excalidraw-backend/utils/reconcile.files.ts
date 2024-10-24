@@ -22,6 +22,7 @@ export const reconcileFiles = (
       };
       continue;
     }
+    // todo: investigate if it's still the case
     /** uncomment this when Excalidraw starts sending the element and the file at the same time
      * otherwise it's causing a bug where the file is sent but the element that should fit the image is not
      * then another event is sent with the host element but not the file

@@ -254,6 +254,14 @@ export class Server {
                 return;
               }
 
+              this.utilService.reportChanges(
+                roomID,
+                socket.data.userInfo.email,
+                (this.snapshots.get(roomID)?.content.elements ??
+                  []) as ExcalidrawElement[],
+                eventData.payload.elements as ExcalidrawElement[],
+              );
+
               this.createAndStoreLatestSnapshot(
                 roomID,
                 eventData.payload.elements,
@@ -347,13 +355,13 @@ export class Server {
     remoteElements: readonly ExcalidrawElement[],
     remoteFileStore: DeepReadonly<ExcalidrawFileStore>,
   ) {
-    const snapshot = this.snapshots.get(roomId);
-    if (!snapshot) {
+    const oldSnapshot = this.snapshots.get(roomId);
+    if (!oldSnapshot) {
       return;
     }
 
     const reconciledSnapshot = InMemorySnapshot.reconcile(
-      snapshot,
+      oldSnapshot,
       remoteElements,
       remoteFileStore,
     );
