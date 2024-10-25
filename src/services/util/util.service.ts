@@ -1,4 +1,6 @@
 import { Inject, Injectable, LoggerService } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import { WhiteboardIntegrationService } from '../whiteboard-integration/whiteboard.integration.service';
 import { UserInfo } from '../whiteboard-integration/user.info';
 import {
@@ -9,18 +11,35 @@ import {
   SaveInputData,
   WhoInputData,
 } from '../whiteboard-integration/inputs';
-import { ExcalidrawContent } from '../../excalidraw/types';
-import { isFetchErrorData } from '../whiteboard-integration/outputs';
+import { ExcalidrawContent, ExcalidrawElement } from '../../excalidraw/types';
 import { excalidrawInitContent } from '../../util';
-import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import { DeepReadonly } from '../../excalidraw-backend/utils';
+import { isFetchErrorData } from '../whiteboard-integration/outputs';
+import { detectChanges } from '../../util/detect-changes/detect.changes';
+import { ElasticsearchService } from '../elasticsearch/elasticsearch.service';
+import {
+  ConfigType,
+  WhiteboardEventLoggingMode,
+  WhiteboardEventLoggingModeType,
+} from '../../config';
 
 @Injectable()
 export class UtilService {
+  private readonly eventLoggingMode: WhiteboardEventLoggingModeType;
+
   constructor(
     @Inject(WINSTON_MODULE_NEST_PROVIDER) private logger: LoggerService,
     private readonly integrationService: WhiteboardIntegrationService,
-  ) {}
+    private readonly elasticService: ElasticsearchService,
+    private readonly configService: ConfigService<ConfigType, true>,
+  ) {
+    this.eventLoggingMode = this.configService.get(
+      'monitoring.logging.events.mode',
+      {
+        infer: true,
+      },
+    );
+  }
 
   public async getUserInfo(opts: {
     cookie?: string;
@@ -82,5 +101,28 @@ export class UtilService {
       this.logger.error(e, e?.stack);
       return excalidrawInitContent;
     }
+  }
+
+  public reportChanges(
+    roomId: string,
+    createdBy: string,
+    oldEl: ExcalidrawElement[],
+    newEl: ExcalidrawElement[],
+  ) {
+    if (this.eventLoggingMode === WhiteboardEventLoggingMode.none) {
+      return;
+    }
+    // we need the changes to calculate the types correctly
+    const changes = detectChanges(oldEl, newEl, [
+      'version',
+      'versionNonce',
+      'updated',
+      'boundElements',
+    ]);
+    if (!changes) {
+      return;
+    }
+
+    this.elasticService.sendWhiteboardChangeEvent(roomId, createdBy, changes);
   }
 }

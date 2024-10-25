@@ -9,6 +9,9 @@ type ExcalidrawBaseElement = {
    Always kept in sync with the array order by `syncMovedIndices` and `syncInvalidIndices`.
    Could be null, i.e. for new elements which were not yet assigned to the scene. */
   index: FractionalIndex | null;
+  updated: number;
+  isDeleted: boolean;
+  boundElements: any[] | null;
 };
 
 export type ExcalidrawImageElement = ExcalidrawBaseElement & {
