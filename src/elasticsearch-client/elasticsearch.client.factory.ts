@@ -1,4 +1,4 @@
-import fs from 'fs';
+import * as fs from 'fs';
 import { LoggerService } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Client } from '@elastic/elasticsearch';
