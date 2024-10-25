@@ -36,7 +36,7 @@ monitoring:
     json: ${LOGGING_FORMAT_JSON}:false
     events:
       # The index responsible for tracking the whiteboard events happening in a particular session
-      whiteboard_event_index: ${ELASTICSEARCH_INDEX_WHITEBOARD_EVENTS}:whiteboard-change-events
+      whiteboard_event_index: ${ELASTIC_INDEX_WHITEBOARD_EVENTS}:whiteboard-change-events
       # The amount of logged information
       # None = disabled;
       # Lite = user + event type;
