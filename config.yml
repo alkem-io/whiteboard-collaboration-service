@@ -12,6 +12,15 @@ rabbitmq:
     # heartbeat
     heartbeat: ${RABBITMQ_HEARTBEAT}:30
 
+elasticsearch:
+  host: ${ELASTICSEARCH_URL}
+  api_key: ${ELASTICSEARCH_API_KEY}
+  retries: ${ELASTICSEARCH_RETRIES}:3
+  timeout: ${ELASTICSEARCH_TIMEOUT}:30000
+  tls:
+    ca_cert_path: ${ELASTIC_TLS_CA_CERT_PATH}:none
+    rejectUnauthorized: ${ELASTIC_TLS_REJECT_UNAUTHORIZED}:false
+
 monitoring:
   logging:
     # A flag setting whether Winston Console transport will be enabled.
@@ -25,6 +34,17 @@ monitoring:
     # The logging format will be in json - useful for parsing
     # if disabled - will be in a human-readable form
     json: ${LOGGING_FORMAT_JSON}:false
+    events:
+      # The index responsible for tracking the whiteboard events happening in a particular session
+      whiteboard_event_index: ${ELASTIC_INDEX_WHITEBOARD_EVENTS}:whiteboard-change-events
+      # The amount of logged information
+      # None = disabled;
+      # Lite = user + event type;
+      # Full = user + event type + delta of what was changed
+      mode: ${WHITEBOARD_EVENTS_LOGGING_MODE}:none
+      # MILLISECONDS of how long are the events buffered in memory before being sent
+      interval: ${WHITEBOARD_EVENTS_LOGGING_INTERVAL}:3000
+
 
 settings:
   # application level settings
