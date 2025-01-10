@@ -2,7 +2,7 @@
 name: Bug report
 about: Create a report to help us improve
 title: "BUG: "
-labels: "bug, excalidraw, whiteboard, collaboration"
+labels: "bug, excalidraw, whiteboard, collaboration, Atlas Team"
 assignees: ""
 ---
 
