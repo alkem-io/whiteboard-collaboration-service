@@ -87,11 +87,15 @@ export class Server {
     private readonly utilService: UtilService,
     private readonly configService: ConfigService<ConfigType, true>,
   ) {
-    const port = this.configService.get('settings.collaboration.port', {
+    const serverOptions = this.configService.get('settings.application', {
       infer: true,
     });
-    // this.wsServer = getExcalidrawBaseServerOrFail(redisAdapterFactory);
-    this.wsServer = getExcalidrawBaseServerOrFail(port, logger);
+    this.wsServer = getExcalidrawBaseServerOrFail({
+      port: +serverOptions.port,
+      pingTimeout: +serverOptions.ping_timeout,
+      pingInterval: +serverOptions.ping_interval,
+      maxHttpBufferSize: +serverOptions.max_http_buffer_size,
+    });
     // don't block the constructor
     this.init()
       .then(() =>
