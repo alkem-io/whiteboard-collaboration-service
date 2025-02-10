@@ -302,16 +302,33 @@ export class Server {
         idleStateEventHandler(roomID, data, socket, this.logger),
       );
 
-      socket.on(
-        DISCONNECTING,
-        async () =>
-          await disconnectingEventHandler(this.wsServer, socket, this.logger),
-      );
-      socket.on(DISCONNECT, () => {
+      socket.on(DISCONNECTING, async (reason, description) => {
+        await disconnectingEventHandler(this.wsServer, socket, this.logger);
+        this.logDisconnectReason(DISCONNECTING, reason, description);
+      });
+      socket.on(DISCONNECT, (reason, description: DisconnectDescription) => {
         disconnectEventHandler(socket);
         this.deleteCollaboratorInactivityTrackerForSocket(socket);
+        this.logDisconnectReason(DISCONNECT, reason, description);
       });
     });
+  }
+
+  private logDisconnectReason(
+    event: typeof DISCONNECT | typeof DISCONNECTING,
+    reason: DisconnectReason,
+    description?: DisconnectDescription,
+  ) {
+    const message = `[${event}] - ${reason} - ${description}`;
+    if (
+      reason === 'transport error' ||
+      reason === 'ping timeout' ||
+      reason === 'parse error'
+    ) {
+      this.logger.error?.(message, undefined, reason);
+    } else {
+      this.logger.verbose?.(message);
+    }
   }
 
   private startContributionTrackerForRoom(roomId: string) {
