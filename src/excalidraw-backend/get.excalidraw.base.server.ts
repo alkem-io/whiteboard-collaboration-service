@@ -17,5 +17,8 @@ export const getExcalidrawBaseServerOrFail = (
   return new SocketIO(httpServer, {
     transports: ['websocket'],
     adapter: adapterFactory,
+    pingTimeout, // default 20000
+    pingInterval, // default 25000
+    maxHttpBufferSize, // default 1e6 - 1MB
   });
 };

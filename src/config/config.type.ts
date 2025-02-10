@@ -42,7 +42,6 @@ export interface ConfigType {
     };
     collaboration: {
       enabled: boolean;
-      port: number;
       contribution_window: number;
       save_interval: number;
       collaborator_inactivity: number;

@@ -1,11 +1,12 @@
-import { SocketIoSocket, CONNECTION_CLOSED } from '../types';
+import { SocketIoSocket, ERROR, ERROR_EVENTS } from '../types';
 
 // closes the connection for this socket
 // and sends an optional message before disconnecting
-export const closeConnection = (socket: SocketIoSocket, message?: string) => {
-  if (message) {
-    socket.emit(CONNECTION_CLOSED, message);
-  }
+export const closeConnectionWithError = (
+  socket: SocketIoSocket,
+  error: (typeof ERROR_EVENTS)[keyof typeof ERROR_EVENTS],
+) => {
+  socket.emit(ERROR, error);
   socket.removeAllListeners();
   socket.disconnect(true);
 };

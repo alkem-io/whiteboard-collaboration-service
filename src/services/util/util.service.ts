@@ -55,7 +55,11 @@ export class UtilService {
       return this.integrationService.who(new WhoInputData({ cookie }));
     }
 
-    throw new Error('No cookie or authorization header provided');
+    // throw new Error('No cookie or authorization header provided');
+    return {
+      id: '',
+      email: '',
+    };
   }
 
   public getUserInfoForRoom(userId: string, roomId: string) {
