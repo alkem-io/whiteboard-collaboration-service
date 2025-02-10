@@ -16,6 +16,7 @@ import {
   SERVER_BROADCAST,
   SERVER_VOLATILE_BROADCAST,
   ERROR,
+  CONNECTION_CLOSED,
 } from './event.names';
 
 type ListenEvents = {
@@ -30,6 +31,7 @@ type EmitEvents = {
   [CLIENT_BROADCAST]: (data: ArrayBuffer) => void;
   [IDLE_STATE]: (data: ArrayBuffer) => void;
   [ROOM_USER_CHANGE]: (socketIds: Array<string>) => void;
+  [CONNECTION_CLOSED]: (message?: string) => void;
   [ERROR]: ({
     code,
     description,
@@ -47,7 +49,6 @@ export type SocketIoSocket = Socket<
   SocketData
 >;
 
-// export type SocketHandlers = ReservedOrUserListener<ReservedEvents, ListenEvents, Ev>
 export type SocketHandlers = ReservedOrUserListener<
   Record<string, never>,
   ListenEvents,

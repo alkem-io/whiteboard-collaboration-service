@@ -8,6 +8,7 @@ export const attachUserInfoOrFailMiddleware: WrappedMiddlewareHandler =
     try {
       socket.data.userInfo = await getter(socket);
     } catch (e: any) {
+      // emit an error message before the connection is closed
       socket.emit('error', ERROR_EVENTS.USER_INFO_NO_VERIFY);
       // no handlers for the exception below - it is handled by socket.io
       next(new Error('Disconnected with error'));

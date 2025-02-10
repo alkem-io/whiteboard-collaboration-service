@@ -13,7 +13,7 @@ import {
 } from '../types';
 import { minCollaboratorsInRoom } from '../types';
 import { IdleStatePayload } from '../types/events';
-import { closeConnectionWithError } from './util';
+import { closeConnection } from './util';
 import { tryDecodeBinary, tryDecodeIncoming } from './decode.incoming';
 import { UnauthorizedReadAccess } from '../types/exceptions';
 
@@ -180,7 +180,7 @@ export const disconnectingEventHandler = async (
     }
   }
 
-  // closeConnectionWithError(socket);
+  closeConnection(socket);
 };
 
 export const disconnectEventHandler = async (socket: SocketIoSocket) => {
