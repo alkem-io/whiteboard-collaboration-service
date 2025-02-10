@@ -24,9 +24,6 @@ type ListenEvents = {
   [SERVER_BROADCAST]: (roomId: string, data: ArrayBuffer) => void;
   [SERVER_VOLATILE_BROADCAST]: (roomId: string, data: ArrayBuffer) => void;
   [IDLE_STATE]: (roomId: string, data: ArrayBuffer) => void;
-  // [DISCONNECTING]: () => void;
-  // [DISCONNECT]: () => void;
-  [ERROR]: (err: Error) => void;
 };
 
 type EmitEvents = {

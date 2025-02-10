@@ -13,6 +13,7 @@ import {
   DISCONNECT,
   DisconnectDescription,
   DISCONNECTING,
+  ERROR,
   ERROR_EVENTS,
   IDLE_STATE,
   INIT_ROOM,
@@ -205,7 +206,7 @@ export class Server {
 
       this.wsServer.to(socket.id).emit(INIT_ROOM);
       // attach error handler
-      socket.on('error', (err) => {
+      socket.on(ERROR, (err) => {
         if (!err) {
           return;
         }
