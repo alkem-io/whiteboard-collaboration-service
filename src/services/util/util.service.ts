@@ -46,7 +46,7 @@ export class UtilService {
     authorization?: string;
   }): Promise<UserInfo | never> {
     const { cookie, authorization } = opts;
-
+    // we want to choose the authorization with priority
     if (authorization) {
       return this.integrationService.who(new WhoInputData({ authorization }));
     }
@@ -55,7 +55,7 @@ export class UtilService {
       return this.integrationService.who(new WhoInputData({ cookie }));
     }
 
-    throw new Error('No cookie or authorization header provided');
+    return { id: '', email: '' };
   }
 
   public getUserInfoForRoom(userId: string, roomId: string) {

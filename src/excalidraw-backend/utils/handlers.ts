@@ -1,4 +1,4 @@
-import { LoggerService } from '@nestjs/common';
+import { LoggerService, UnauthorizedException } from '@nestjs/common';
 import {
   SocketIoSocket,
   SocketIoServer,
@@ -15,6 +15,7 @@ import { minCollaboratorsInRoom } from '../types';
 import { IdleStatePayload } from '../types/events';
 import { closeConnection } from './util';
 import { tryDecodeBinary, tryDecodeIncoming } from './decode.incoming';
+import { UnauthorizedReadAccess } from '../types/exceptions';
 
 const fetchSocketsSafe = async (
   wsServer: SocketIoServer,
@@ -28,8 +29,17 @@ const fetchSocketsSafe = async (
     return [];
   }
 };
+/**
+ *
+ * @param roomID
+ * @param socket
+ * @param wsServer
+ * @param logger
+ * @param getRoomInfo
+ * @throws UnauthorizedException if the user is not authorized to read the room
+ */
 // todo: split this into multiple functions and combine in one handler
-export const authorizeWithRoomAndJoinHandler = async (
+export const authorizeWithRoomOrFailAndJoinHandler = async (
   roomID: string,
   socket: SocketIoSocket,
   wsServer: SocketIoServer,
@@ -44,11 +54,7 @@ export const authorizeWithRoomAndJoinHandler = async (
   } = await getRoomInfo(roomID, userInfo.id);
 
   if (!canRead) {
-    logger.error(
-      `Unable to authorize User '${userInfo.id}' with Whiteboard: '${roomID}'`,
-    );
-    closeConnection(socket, 'Unauthorized read access');
-    return;
+    throw new UnauthorizedReadAccess();
   }
   // the amount must be defined at this point
   const maxCollaboratorsForThisRoom = maxCollaborators!;

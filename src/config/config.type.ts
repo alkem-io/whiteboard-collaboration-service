@@ -37,12 +37,15 @@ export interface ConfigType {
   };
   settings: {
     application: {
+      port: number;
       queue: string;
       queue_response_timeout: number;
+      ping_timeout: number;
+      ping_interval: number;
+      max_http_buffer_size: number;
     };
     collaboration: {
       enabled: boolean;
-      port: number;
       contribution_window: number;
       save_interval: number;
       collaborator_inactivity: number;

@@ -49,15 +49,21 @@ monitoring:
 settings:
   # application level settings
   application:
+    # On which port the server will be running
+    port: ${PORT}:4002
     # queue
     queue: ${QUEUE}:alkemio-whiteboards
     # MILLISECONDS wait time for a response after a request on the message queue
     queue_response_timeout: ${QUEUE_RESPONSE_TIMEOUT}:10000
+    # How many ms without a pong packet to consider the connection closed
+    ping_timeout: ${PING_TIMEOUT}:40000
+    # How many ms before sending a new ping packet
+    ping_interval: ${PING_INTERVAL}:30000
+    # How many bytes or characters a message can be, before closing the session (to avoid DoS).
+    max_http_buffer_size: ${MAX_HTTP_BUFFER_SIZE}:4e6
   # the collaboration experience
   collaboration:
     enabled: ${ENABLED}:true
-    #
-    port: ${COLLABORATION_PORT}:4002
     # the window in which contributions are accepted to be counted towards a single contribution event;
     # time is in SECONDS
     contribution_window: ${CONTRIBUTION_WINDOW}:600

@@ -1,11 +1,6 @@
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import { setInterval, setTimeout } from 'node:timers/promises';
-import {
-  Inject,
-  Injectable,
-  LoggerService,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Inject, Injectable, LoggerService } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { debounce, DebouncedFunc, throttle } from 'lodash';
 import {
@@ -16,7 +11,10 @@ import {
   defaultContributionInterval,
   defaultSaveInterval,
   DISCONNECT,
+  DisconnectDescription,
   DISCONNECTING,
+  ERROR,
+  ERROR_EVENTS,
   IDLE_STATE,
   INIT_ROOM,
   InMemorySnapshot,
@@ -28,6 +26,7 @@ import {
   SERVER_SIDE_ROOM_DELETED,
   SERVER_VOLATILE_BROADCAST,
   SocketEventData,
+  SocketHandlers,
   SocketIoServer,
   SocketIoSocket,
 } from './types';
@@ -39,8 +38,8 @@ import {
 import { UserInfo } from '../services/whiteboard-integration/user.info';
 import { UtilService } from '../services/util/util.service';
 import {
-  authorizeWithRoomAndJoinHandler,
-  closeConnection,
+  authorizeWithRoomOrFailAndJoinHandler,
+  closeConnectionWithError,
   DeepReadonly,
   disconnectEventHandler,
   disconnectingEventHandler,
@@ -58,6 +57,8 @@ import { tryDecodeIncoming } from './utils/decode.incoming';
 import { SceneInitPayload, ServerBroadcastPayload } from './types/events';
 import { ExcalidrawElement, ExcalidrawFileStore } from '../excalidraw/types';
 import { isSaveErrorData } from '../services/whiteboard-integration/outputs';
+import { UnauthorizedReadAccess } from './types/exceptions';
+import { DisconnectReason } from 'socket.io/dist/socket-types';
 
 type RoomTrackers = Map<string, AbortController>;
 type SocketTrackers = Map<string, AbortController>;
@@ -87,11 +88,15 @@ export class Server {
     private readonly utilService: UtilService,
     private readonly configService: ConfigService<ConfigType, true>,
   ) {
-    const port = this.configService.get('settings.collaboration.port', {
+    const serverOptions = this.configService.get('settings.application', {
       infer: true,
     });
-    // this.wsServer = getExcalidrawBaseServerOrFail(redisAdapterFactory);
-    this.wsServer = getExcalidrawBaseServerOrFail(port, logger);
+    this.wsServer = getExcalidrawBaseServerOrFail({
+      port: +serverOptions.port,
+      pingTimeout: +serverOptions.ping_timeout,
+      pingInterval: +serverOptions.ping_interval,
+      maxHttpBufferSize: +serverOptions.max_http_buffer_size,
+    });
     // don't block the constructor
     this.init()
       .then(() =>
@@ -188,6 +193,8 @@ export class Server {
     this.adapterInit();
     // middlewares
     this.wsServer.use(initUserDataMiddleware);
+    // may get executed after the "connection" event
+    // as a result the socket will establish connection and then get disconnected immediately
     this.wsServer.use(
       attachUserInfoOrFailMiddleware(this.getUserInfo.bind(this)),
     );
@@ -198,83 +205,90 @@ export class Server {
       );
 
       this.wsServer.to(socket.id).emit(INIT_ROOM);
-      // attach error handlers
-      socket.on('error', (err) => {
+      // attach error handler
+      socket.on(ERROR, (err) => {
         if (!err) {
           return;
         }
 
         this.logger.error(err);
-
-        if (err && err instanceof UnauthorizedException) {
-          closeConnection(socket, err.message);
-          this.deleteCollaboratorInactivityTrackerForSocket(socket);
-        }
       });
 
       socket.on(JOIN_ROOM, async (roomID) => {
-        await this.loadSnapshot(roomID);
-
+        // authorize and join
         // this logic could be provided by an entitlement (license) service
-        await authorizeWithRoomAndJoinHandler(
-          roomID,
-          socket,
-          this.wsServer,
-          this.logger,
-          (roomId, userId) =>
-            this.utilService.getUserInfoForRoom(userId, roomId),
-        );
-        await this.initSceneForSocket(socket, roomID);
-
-        if (socket.data.collaborator) {
-          this.startCollaboratorInactivityTrackerForSocket(socket);
-          // user can broadcast content change events
-          socket.on(
-            SERVER_BROADCAST,
-            async (roomID: string, data: ArrayBuffer) => {
-              serverBroadcastEventHandler(roomID, data, socket, (roomId) =>
-                this.utilService.contentModified(
-                  socket.data.userInfo.id,
-                  roomId,
-                ),
-              );
-              this.resetCollaboratorInactivityTrackerForSocket(socket);
-              // todo extract to a function
-              let eventData:
-                | SocketEventData<ServerBroadcastPayload>
-                | undefined;
-              try {
-                eventData = tryDecodeIncoming<ServerBroadcastPayload>(data);
-              } catch (e) {
-                this.logger.error({
-                  message: e?.message ?? JSON.stringify(e),
-                });
-              }
-              if (!eventData) {
-                return;
-              }
-
-              this.utilService.reportChanges(
-                roomID,
-                socket.data.userInfo.email,
-                (this.snapshots.get(roomID)?.content.elements ??
-                  []) as ExcalidrawElement[],
-                eventData.payload.elements as ExcalidrawElement[],
-              );
-
-              this.createAndStoreLatestSnapshot(
-                roomID,
-                eventData.payload.elements,
-                eventData.payload.files,
-              );
-
-              this.queueSave(roomID);
-            },
+        try {
+          await authorizeWithRoomOrFailAndJoinHandler(
+            roomID,
+            socket,
+            this.wsServer,
+            this.logger,
+            (roomId, userId) =>
+              this.utilService.getUserInfoForRoom(userId, roomId),
           );
+        } catch (e: any) {
+          if (e instanceof UnauthorizedReadAccess) {
+            this.logger.warn?.(
+              `User '${socket.data.userInfo.email}' insufficient read access to Whiteboard: '${roomID}'`,
+            );
+            closeConnectionWithError(socket, ERROR_EVENTS.ROOM_NO_READ_ACCESS);
+            return;
+          }
+          this.logger.error(
+            `Error while trying to authorize User '${socket.data.userInfo.email}' with Whiteboard: '${roomID}'`,
+            e.stack,
+          );
+          closeConnectionWithError(socket, ERROR_EVENTS.GENERIC_ERROR);
+          return;
         }
+        // log results
         this.logger.verbose?.(
           `User '${socket.data.userInfo.email}' read=${socket.data.viewer}, update=${socket.data.collaborator}`,
         );
+
+        // load snapshot
+        await this.loadSnapshot(roomID);
+        // send scene init to the socket
+        await this.initSceneForSocket(socket, roomID);
+        // attach collaborator handler if applicable
+        if (socket.data.collaborator) {
+          this.startCollaboratorInactivityTrackerForSocket(socket);
+          // user can broadcast content change events
+          socket.on(SERVER_BROADCAST, (roomID: string, data: ArrayBuffer) => {
+            serverBroadcastEventHandler(roomID, data, socket, (roomId) =>
+              this.utilService.contentModified(socket.data.userInfo.id, roomId),
+            );
+            this.resetCollaboratorInactivityTrackerForSocket(socket);
+            // todo extract to a function
+            let eventData: SocketEventData<ServerBroadcastPayload> | undefined;
+            try {
+              eventData = tryDecodeIncoming<ServerBroadcastPayload>(data);
+            } catch (e) {
+              this.logger.error({
+                message: e?.message ?? JSON.stringify(e),
+              });
+            }
+            if (!eventData) {
+              return;
+            }
+
+            this.utilService.reportChanges(
+              roomID,
+              socket.data.userInfo.email,
+              (this.snapshots.get(roomID)?.content.elements ??
+                []) as ExcalidrawElement[],
+              eventData.payload.elements as ExcalidrawElement[],
+            );
+
+            this.createAndStoreLatestSnapshot(
+              roomID,
+              eventData.payload.elements,
+              eventData.payload.files,
+            );
+
+            this.queueSave(roomID);
+          });
+        }
       });
 
       socket.on(
@@ -289,16 +303,33 @@ export class Server {
         idleStateEventHandler(roomID, data, socket, this.logger),
       );
 
-      socket.on(
-        DISCONNECTING,
-        async () =>
-          await disconnectingEventHandler(this.wsServer, socket, this.logger),
-      );
-      socket.on(DISCONNECT, () => {
+      socket.on(DISCONNECTING, async (reason, description) => {
+        await disconnectingEventHandler(this.wsServer, socket, this.logger);
+        this.logDisconnectReason(DISCONNECTING, reason, description);
+      });
+      socket.on(DISCONNECT, (reason, description: DisconnectDescription) => {
         disconnectEventHandler(socket);
         this.deleteCollaboratorInactivityTrackerForSocket(socket);
+        this.logDisconnectReason(DISCONNECT, reason, description);
       });
     });
+  }
+
+  private logDisconnectReason(
+    event: typeof DISCONNECT | typeof DISCONNECTING,
+    reason: DisconnectReason,
+    description?: DisconnectDescription,
+  ) {
+    const message = `[${event}] - ${reason} - ${description}`;
+    if (
+      reason === 'transport error' ||
+      reason === 'ping timeout' ||
+      reason === 'parse error'
+    ) {
+      this.logger.error?.(message, undefined, reason);
+    } else {
+      this.logger.verbose?.(message);
+    }
   }
 
   private startContributionTrackerForRoom(roomId: string) {

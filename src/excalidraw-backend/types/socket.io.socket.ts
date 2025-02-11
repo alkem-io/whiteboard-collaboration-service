@@ -1,9 +1,12 @@
 import { RemoteSocket, Socket } from 'socket.io';
-import { DefaultEventsMap } from 'socket.io/dist/typed-events';
+import {
+  DefaultEventsMap,
+  EventNames,
+  ReservedOrUserListener,
+} from 'socket.io/dist/typed-events';
 import { SocketData } from './socket.data';
 import {
   CLIENT_BROADCAST,
-  CONNECTION_CLOSED,
   DISCONNECT,
   DISCONNECTING,
   IDLE_STATE,
@@ -12,6 +15,8 @@ import {
   ROOM_USER_CHANGE,
   SERVER_BROADCAST,
   SERVER_VOLATILE_BROADCAST,
+  ERROR,
+  CONNECTION_CLOSED,
 } from './event.names';
 
 type ListenEvents = {
@@ -20,15 +25,20 @@ type ListenEvents = {
   [SERVER_BROADCAST]: (roomId: string, data: ArrayBuffer) => void;
   [SERVER_VOLATILE_BROADCAST]: (roomId: string, data: ArrayBuffer) => void;
   [IDLE_STATE]: (roomId: string, data: ArrayBuffer) => void;
-  [DISCONNECTING]: () => void;
-  [DISCONNECT]: () => void;
-  error: (err: Error) => void;
 };
+
 type EmitEvents = {
   [CLIENT_BROADCAST]: (data: ArrayBuffer) => void;
   [IDLE_STATE]: (data: ArrayBuffer) => void;
   [ROOM_USER_CHANGE]: (socketIds: Array<string>) => void;
   [CONNECTION_CLOSED]: (message?: string) => void;
+  [ERROR]: ({
+    code,
+    description,
+  }: {
+    code: number;
+    description: string;
+  }) => void;
 };
 type ServerSideEvents = DefaultEventsMap;
 
@@ -37,6 +47,12 @@ export type SocketIoSocket = Socket<
   EmitEvents,
   ServerSideEvents,
   SocketData
+>;
+
+export type SocketHandlers = ReservedOrUserListener<
+  Record<string, never>,
+  ListenEvents,
+  EventNames<ListenEvents>
 >;
 
 export type RemoteSocketIoSocket = RemoteSocket<EmitEvents, SocketData>;

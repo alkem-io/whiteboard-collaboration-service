@@ -1,7 +1,6 @@
-import { UnauthorizedException } from '@nestjs/common';
-import { WrappedMiddlewareHandler } from './middleware.handler.type';
 import { UserInfo } from '../../services/whiteboard-integration/user.info';
-import { SocketIoSocket } from '../types';
+import { SocketIoSocket, ERROR_EVENTS } from '../types';
+import { WrappedMiddlewareHandler } from './middleware.handler.type';
 
 export const attachUserInfoOrFailMiddleware: WrappedMiddlewareHandler =
   (getter: (socket: SocketIoSocket) => Promise<UserInfo>) =>
@@ -9,11 +8,10 @@ export const attachUserInfoOrFailMiddleware: WrappedMiddlewareHandler =
     try {
       socket.data.userInfo = await getter(socket);
     } catch (e: any) {
-      next(
-        new UnauthorizedException(
-          `Error while trying to get user info: ${e.message}`,
-        ),
-      );
+      // emit an error message before the connection is closed
+      socket.emit('error', ERROR_EVENTS.USER_INFO_NO_VERIFY);
+      // no handlers for the exception below - it is handled by socket.io
+      next(new Error('Disconnected with error'));
     }
 
     next();
