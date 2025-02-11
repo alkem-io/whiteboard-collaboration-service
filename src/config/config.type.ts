@@ -40,6 +40,7 @@ export interface ConfigType {
       port: number;
       queue: string;
       queue_response_timeout: number;
+      queue_request_retries: number;
       ping_timeout: number;
       ping_interval: number;
       max_http_buffer_size: number;

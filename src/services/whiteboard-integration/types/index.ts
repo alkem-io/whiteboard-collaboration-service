@@ -1,2 +1,3 @@
 export * from './rmq.connection.error';
-export * from './our.timeout.error';
+export * from './timeout.exception';
+export * from './retry.exception';
