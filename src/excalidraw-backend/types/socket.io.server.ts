@@ -12,6 +12,7 @@ import {
   SERVER_BROADCAST,
   SERVER_SIDE_ROOM_DELETED,
   SERVER_VOLATILE_BROADCAST,
+  ROOM_NOT_SAVED,
 } from './event.names';
 import { SocketIoSocket } from './socket.io.socket';
 import { CollaboratorModeReasons } from './collaboration.mode.reasons';
@@ -29,6 +30,7 @@ type EmitEvents = {
   [ROOM_USER_CHANGE]: (socketIDs: Array<string>) => void;
   [SCENE_INIT]: (scene: ArrayBuffer) => void;
   [ROOM_SAVED]: () => void;
+  [ROOM_NOT_SAVED]: ({ error }: { error: string }) => void;
   [COLLABORATOR_MODE]: (data: {
     mode: 'read' | 'write';
     reason?: CollaboratorModeReasons;
