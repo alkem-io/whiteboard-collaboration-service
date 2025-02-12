@@ -5,6 +5,6 @@ import {
 
 export class RetryException extends BaseException {
   constructor(public readonly details?: ExceptionDetails) {
-    super('Timeout', details);
+    super('Retries exceeded', details);
   }
 }
