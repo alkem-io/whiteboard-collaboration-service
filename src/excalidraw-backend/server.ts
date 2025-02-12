@@ -164,14 +164,15 @@ export class Server {
         // this room was deleted, but it's still active on the other instances
         // so do nothing here
         this.logger.verbose?.(
-          `Room '${roomId}' deleted locally ('${APP_ID}'), bu t ${connectedSocketsToRoomCount} sockets are still connected elsewhere`,
+          `Room '${roomId}' deleted locally ('${APP_ID}'), but ${connectedSocketsToRoomCount} sockets are still connected elsewhere`,
         );
         return;
       }
       // send an event that the room is actually deleted everywhere,
-      // because this was the last one
-      // todo: avoid calling in case of single istance
+      // because this was the last one (only if there are more than one server)
+      // if ((await adapter.serverCount()) > 1) {
       this.wsServer.serverSideEmit(SERVER_SIDE_ROOM_DELETED, APP_ID, roomId);
+      // }
 
       this.logger.verbose?.(
         `Room '${roomId}' deleted locally and everywhere else - this was the final instance`,
