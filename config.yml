@@ -54,7 +54,7 @@ settings:
     # queue
     queue: ${QUEUE}:alkemio-whiteboards
     # MILLISECONDS wait time for a response after a request on the message queue
-    queue_response_timeout: ${QUEUE_RESPONSE_TIMEOUT}:10000
+    queue_response_timeout: ${QUEUE_RESPONSE_TIMEOUT}:5000
     # How many times the requests to retry before failing
     queue_request_retries: ${QUEUE_REQUEST_RETRIES}:3
     # How many ms without a pong packet to consider the connection closed
