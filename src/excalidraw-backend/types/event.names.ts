@@ -1,5 +1,6 @@
 export const SCENE_INIT = 'scene-init';
 export const ROOM_SAVED = 'room-saved';
+export const ROOM_NOT_SAVED = 'room-not-saved';
 export const SERVER_BROADCAST = 'server-broadcast';
 export const SERVER_VOLATILE_BROADCAST = 'server-volatile-broadcast';
 

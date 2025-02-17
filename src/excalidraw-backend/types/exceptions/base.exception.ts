@@ -15,7 +15,7 @@ export class BaseException extends Error {
   public readonly errorId: string;
 
   constructor(
-    message: string,
+    public readonly message: string,
     public readonly details?: ExceptionDetails,
   ) {
     super(message);

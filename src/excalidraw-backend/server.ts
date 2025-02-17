@@ -20,13 +20,13 @@ import {
   InMemorySnapshot,
   JOIN_ROOM,
   resetCollaboratorModeDebounceWait,
+  ROOM_NOT_SAVED,
   ROOM_SAVED,
   SCENE_INIT,
   SERVER_BROADCAST,
   SERVER_SIDE_ROOM_DELETED,
   SERVER_VOLATILE_BROADCAST,
   SocketEventData,
-  SocketHandlers,
   SocketIoServer,
   SocketIoSocket,
 } from './types';
@@ -169,8 +169,10 @@ export class Server {
         return;
       }
       // send an event that the room is actually deleted everywhere,
-      // because this was the last one
+      // because this was the last one (only if there are more than one server)
+      // if ((await adapter.serverCount()) > 1) {
       this.wsServer.serverSideEmit(SERVER_SIDE_ROOM_DELETED, APP_ID, roomId);
+      // }
 
       this.logger.verbose?.(
         `Room '${roomId}' deleted locally and everywhere else - this was the final instance`,
@@ -544,11 +546,8 @@ export class Server {
   ): ThrottledSaveFunction {
     const throttledSave = throttle(
       async (roomId: string) => {
-        const hasSaved = await this.saveRoom(roomId);
-
-        if (hasSaved) {
-          this.notifyRoomSaved(roomId);
-        }
+        const { hasSaved, error } = await this.saveRoom(roomId);
+        this.notifyRoomSaveResult(roomId, hasSaved, error);
       },
       wait,
       { leading: false, trailing: true },
@@ -589,8 +588,12 @@ export class Server {
     await throttledSaveFn.flush();
   }
 
-  private notifyRoomSaved(roomId: string) {
-    this.wsServer.in(roomId).emit(ROOM_SAVED);
+  private notifyRoomSaveResult(roomId: string, isSaved: boolean, error = '') {
+    if (isSaved) {
+      this.wsServer.in(roomId).emit(ROOM_SAVED);
+    } else {
+      this.wsServer.in(roomId).emit(ROOM_NOT_SAVED, { error });
+    }
   }
   /**
    * Loads the snapshot in the in-memory Map and returns it.
@@ -614,23 +617,25 @@ export class Server {
     return snapshotContent;
   }
 
-  private async saveRoom(roomId: string): Promise<boolean> {
+  private async saveRoom(
+    roomId: string,
+  ): Promise<{ hasSaved: boolean; error?: string }> {
     const snapshot = this.snapshots.get(roomId);
     if (!snapshot) {
       this.logger.error(
         `No snapshot found for room '${roomId}' in the local storage!`,
       );
-      return false;
+      return { hasSaved: false, error: 'No snapshot found' };
     }
 
     const cleanContent = prepareContentForSave(snapshot);
     const { data } = await this.utilService.save(roomId, cleanContent);
     if (isSaveErrorData(data)) {
       this.logger.error(`Failed to save room '${roomId}': ${data.error}`);
-      return false;
+      return { hasSaved: false, error: 'Server failed to save' };
     } else {
       this.logger.verbose?.(`Room '${roomId}' saved successfully`);
-      return true;
+      return { hasSaved: true };
     }
   }
 }
