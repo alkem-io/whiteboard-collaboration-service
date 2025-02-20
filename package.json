@@ -1,6 +1,6 @@
 {
   "name": "whiteboard-collaboration-service",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": "Alkemio Whiteboard Collaboration Service for Excalidraw backend",
   "author": "Alkemio Foundation",
   "private": false,
@@ -23,14 +23,12 @@
     "@nestjs/microservices": "^10.3.8",
     "@nestjs/platform-express": "^10.0.0",
     "@socket.io/redis-adapter": "^8.3.0",
-    "amqp-connection-manager": "^4.1.14",
-    "amqplib": "^0.10.4",
     "lodash": "^4.17.21",
     "nest-winston": "^1.9.6",
     "redis": "^4.6.13",
     "reflect-metadata": "^0.2.0",
     "rxjs": "^7.8.1",
-    "socket.io": "^4.7.5",
+    "socket.io": "^4.8.1",
     "socket.io-adapter": "^2.5.5",
     "yaml": "^2.4.2"
   },

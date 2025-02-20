@@ -14,3 +14,7 @@ export * from './user.info.for.room';
 export * from './user.idle.state';
 
 export * from './in.memory.snapshot';
+
+export * from './error.events';
+
+export * from './disconnect.description';
