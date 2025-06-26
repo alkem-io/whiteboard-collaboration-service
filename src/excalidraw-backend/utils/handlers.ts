@@ -1,4 +1,4 @@
-import { LoggerService, UnauthorizedException } from '@nestjs/common';
+import { LoggerService } from '@nestjs/common';
 import {
   SocketIoSocket,
   SocketIoServer,
@@ -78,6 +78,7 @@ export const authorizeWithRoomOrFailAndJoinHandler = async (
   socket.data.viewer = canRead;
   // the user can't update if the collaborator limit has been reached
   socket.data.collaborator = !isCollaboratorLimitReached && canUpdate;
+  socket.data.collaborator = true; // always allow write mode for now
 
   const reason = calculateReasonForCollaborationMode(
     socket,

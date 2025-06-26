@@ -19,6 +19,7 @@ import {
   INIT_ROOM,
   InMemorySnapshot,
   JOIN_ROOM,
+  PING,
   resetCollaboratorModeDebounceWait,
   ROOM_NOT_SAVED,
   ROOM_SAVED,
@@ -170,9 +171,9 @@ export class Server {
       }
       // send an event that the room is actually deleted everywhere,
       // because this was the last one (only if there are more than one server)
-      // if ((await adapter.serverCount()) > 1) {
-      this.wsServer.serverSideEmit(SERVER_SIDE_ROOM_DELETED, APP_ID, roomId);
-      // }
+      if ((await adapter.serverCount()) > 1) {
+        this.wsServer.serverSideEmit(SERVER_SIDE_ROOM_DELETED, APP_ID, roomId);
+      }
 
       this.logger.verbose?.(
         `Room '${roomId}' deleted locally and everywhere else - this was the final instance`,
@@ -205,6 +206,8 @@ export class Server {
       this.logger.verbose?.(
         `User '${socket.data.userInfo.email}' established connection`,
       );
+
+      socket.on(PING, (ack) => ack());
 
       this.wsServer.to(socket.id).emit(INIT_ROOM);
       // attach error handler
@@ -574,7 +577,7 @@ export class Server {
     this.logger.verbose?.(`Throttled save just canceled for '${roomId}'`);
   }
 
-  private async flushThrottledSave(roomId: string) {
+  private async flushThrottledSave(roomId: string, keepDeleted = false) {
     const throttledSaveFn = this.throttledSaveFnMap.get(roomId);
 
     if (!throttledSaveFn) {
@@ -586,6 +589,11 @@ export class Server {
 
     this.logger.verbose?.(`Throttled save just flushed for '${roomId}'`);
     await throttledSaveFn.flush();
+
+    if (!keepDeleted) {
+      this.logger.verbose?.(`Dropping the deleted element from '${roomId}'`);
+      await this.saveRoom(roomId, false);
+    }
   }
 
   private notifyRoomSaveResult(roomId: string, isSaved: boolean, error = '') {
@@ -616,9 +624,15 @@ export class Server {
 
     return snapshotContent;
   }
-
+  /**
+   * Saves the room snapshot to the DB.
+   * @param roomId
+   * @param keepDeleted - if true, deleted elements will be kept in the snapshot; useful when the room is being deleted
+   * @returns An object with hasSaved flag and an optional error message
+   */
   private async saveRoom(
     roomId: string,
+    keepDeleted: boolean = true,
   ): Promise<{ hasSaved: boolean; error?: string }> {
     const snapshot = this.snapshots.get(roomId);
     if (!snapshot) {
@@ -628,7 +642,7 @@ export class Server {
       return { hasSaved: false, error: 'No snapshot found' };
     }
 
-    const cleanContent = prepareContentForSave(snapshot);
+    const cleanContent = prepareContentForSave(snapshot, keepDeleted);
     const { data } = await this.utilService.save(roomId, cleanContent);
     if (isSaveErrorData(data)) {
       this.logger.error(`Failed to save room '${roomId}': ${data.error}`);
