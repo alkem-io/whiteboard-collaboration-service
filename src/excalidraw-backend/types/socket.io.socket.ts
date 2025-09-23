@@ -7,8 +7,6 @@ import {
 import { SocketData } from './socket.data';
 import {
   CLIENT_BROADCAST,
-  DISCONNECT,
-  DISCONNECTING,
   IDLE_STATE,
   SCENE_INIT,
   JOIN_ROOM,
