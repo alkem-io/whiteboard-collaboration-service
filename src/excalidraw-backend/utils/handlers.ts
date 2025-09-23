@@ -1,4 +1,4 @@
-import { LoggerService, UnauthorizedException } from '@nestjs/common';
+import { LoggerService } from '@nestjs/common';
 import {
   SocketIoSocket,
   SocketIoServer,
