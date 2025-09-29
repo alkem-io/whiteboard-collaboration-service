@@ -1,5 +1,4 @@
 import * as http from 'node:http';
-import { LoggerService } from '@nestjs/common';
 import { Namespace, Server as SocketIO } from 'socket.io';
 import { Adapter } from 'socket.io-adapter';
 import { SocketIoServer } from './types';
