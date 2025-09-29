@@ -181,7 +181,7 @@ export class Server {
       // delete trackers that were left locally
       this.deleteTrackersForRoom(roomId);
       // execute immediately the queued call (if any)
-      await this.flushThrottledSave(roomId);
+      await this.flushThrottledSave(roomId, false);
       // delete the throttled save function
       this.cancelThrottledSave(roomId);
       // todo: should we keep it cached?
@@ -540,6 +540,7 @@ export class Server {
    *  Creates a new throttled save function for a room and stores it in  __throttledSaveFnMap__.</br>
    *  Called once immediately on the first invocation, then once after __wait__ milliseconds; Guaranteed save every __maxWait__ milliseconds;</br>
    *  To be used when the room is created, and used only for that room.</br>
+   *  Will keep the deleted elements in the snapshot when saving.</br>
    *  Use __cancelThrottledSave__ to cancel this function.</br>
    *  Use __flushThrottledSave__ to invoke this function immediately.
    */
@@ -577,7 +578,7 @@ export class Server {
     this.logger.verbose?.(`Throttled save just canceled for '${roomId}'`);
   }
 
-  private async flushThrottledSave(roomId: string, keepDeleted = false) {
+  private async flushThrottledSave(roomId: string, keepDeleted: boolean) {
     const throttledSaveFn = this.throttledSaveFnMap.get(roomId);
 
     if (!throttledSaveFn) {
@@ -627,7 +628,7 @@ export class Server {
   /**
    * Saves the room snapshot to the DB.
    * @param roomId
-   * @param keepDeleted - if true, deleted elements will be kept in the snapshot; useful when the room is being deleted
+   * @param keepDeleted - if true, deleted elements will be kept in the snapshot; useful when the room is being deleted and we want to drop the deleted elements (undoable actions)
    * @returns An object with hasSaved flag and an optional error message
    */
   private async saveRoom(

@@ -24,7 +24,7 @@ type ListenEvents = {
   [SERVER_BROADCAST]: (roomId: string, data: ArrayBuffer) => void;
   [SERVER_VOLATILE_BROADCAST]: (roomId: string, data: ArrayBuffer) => void;
   [SERVER_SIDE_ROOM_DELETED]: (serverId: string, roomId: string) => void;
-  [PING]: (cb: () => void) => void;
+  [PING]: (ack: () => void) => void;
 };
 type EmitEvents = {
   [INIT_ROOM]: () => void;

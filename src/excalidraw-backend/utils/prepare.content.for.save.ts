@@ -3,7 +3,6 @@ import { DeepReadonly } from './deep.readonly';
 import { ExcalidrawContent, ExcalidrawFileStore } from '../../excalidraw/types';
 import { isExcalidrawImageElement } from '../../util';
 
-// todo: remove isDeleted, and maybe others
 export const prepareContentForSave = (
   snapshot: InMemorySnapshot,
   keepDeleted: boolean,
@@ -24,13 +23,13 @@ export const prepareContentForSave = (
     }
   }
 
-  const filteredElements = keepDeleted
+  const withOrWithoutDeletedElements = keepDeleted
     ? elements
     : elements.filter((element) => !element.isDeleted);
 
   return {
     ...restOfContent,
     files: cleanStore,
-    elements: filteredElements,
+    elements: withOrWithoutDeletedElements,
   };
 };
