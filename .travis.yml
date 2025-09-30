@@ -11,4 +11,4 @@ cache:
 install:
   - npm install
 before_install:
-  - npm i -g npm@10.8.2
+  - npm i -g npm@10.9.3
