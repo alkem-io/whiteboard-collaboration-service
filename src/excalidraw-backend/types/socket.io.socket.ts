@@ -15,6 +15,7 @@ import {
   SERVER_VOLATILE_BROADCAST,
   ERROR,
   CONNECTION_CLOSED,
+  PING,
 } from './event.names';
 
 type ListenEvents = {
@@ -23,6 +24,7 @@ type ListenEvents = {
   [SERVER_BROADCAST]: (roomId: string, data: ArrayBuffer) => void;
   [SERVER_VOLATILE_BROADCAST]: (roomId: string, data: ArrayBuffer) => void;
   [IDLE_STATE]: (roomId: string, data: ArrayBuffer) => void;
+  [PING]: (ack: () => void) => void;
 };
 
 type EmitEvents = {
