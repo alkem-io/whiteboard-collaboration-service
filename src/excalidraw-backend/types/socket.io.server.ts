@@ -13,6 +13,7 @@ import {
   SERVER_SIDE_ROOM_DELETED,
   SERVER_VOLATILE_BROADCAST,
   ROOM_NOT_SAVED,
+  PING,
 } from './event.names';
 import { SocketIoSocket } from './socket.io.socket';
 import { CollaboratorModeReasons } from './collaboration.mode.reasons';
@@ -23,6 +24,7 @@ type ListenEvents = {
   [SERVER_BROADCAST]: (roomId: string, data: ArrayBuffer) => void;
   [SERVER_VOLATILE_BROADCAST]: (roomId: string, data: ArrayBuffer) => void;
   [SERVER_SIDE_ROOM_DELETED]: (serverId: string, roomId: string) => void;
+  [PING]: (ack: () => void) => void;
 };
 type EmitEvents = {
   [INIT_ROOM]: () => void;

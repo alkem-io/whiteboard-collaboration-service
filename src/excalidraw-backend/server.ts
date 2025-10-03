@@ -19,6 +19,7 @@ import {
   INIT_ROOM,
   InMemorySnapshot,
   JOIN_ROOM,
+  PING,
   resetCollaboratorModeDebounceWait,
   ROOM_NOT_SAVED,
   ROOM_SAVED,
@@ -170,9 +171,9 @@ export class Server {
       }
       // send an event that the room is actually deleted everywhere,
       // because this was the last one (only if there are more than one server)
-      // if ((await adapter.serverCount()) > 1) {
-      this.wsServer.serverSideEmit(SERVER_SIDE_ROOM_DELETED, APP_ID, roomId);
-      // }
+      if ((await adapter.serverCount()) > 1) {
+        this.wsServer.serverSideEmit(SERVER_SIDE_ROOM_DELETED, APP_ID, roomId);
+      }
 
       this.logger.verbose?.(
         `Room '${roomId}' deleted locally and everywhere else - this was the final instance`,
@@ -180,7 +181,7 @@ export class Server {
       // delete trackers that were left locally
       this.deleteTrackersForRoom(roomId);
       // execute immediately the queued call (if any)
-      await this.flushThrottledSave(roomId);
+      await this.flushThrottledSave(roomId, false);
       // delete the throttled save function
       this.cancelThrottledSave(roomId);
       // todo: should we keep it cached?
@@ -205,6 +206,8 @@ export class Server {
       this.logger.verbose?.(
         `User '${socket.data.userInfo.email}' established connection`,
       );
+
+      socket.on(PING, (ack) => ack());
 
       this.wsServer.to(socket.id).emit(INIT_ROOM);
       // attach error handler
@@ -305,8 +308,9 @@ export class Server {
         idleStateEventHandler(roomID, data, socket, this.logger),
       );
 
-      socket.on(DISCONNECTING, async () => {
+      socket.on(DISCONNECTING, async (reason, description) => {
         await disconnectingEventHandler(this.wsServer, socket, this.logger);
+        this.logDisconnectReason(DISCONNECTING, reason, description);
       });
       socket.on(DISCONNECT, (reason, description: DisconnectDescription) => {
         disconnectEventHandler(socket);
@@ -327,7 +331,7 @@ export class Server {
       reason === 'ping timeout' ||
       reason === 'parse error'
     ) {
-      this.logger.error?.({ message, reason });
+      this.logger.error?.(message, undefined, reason);
     } else {
       this.logger.verbose?.(message);
     }
@@ -536,6 +540,7 @@ export class Server {
    *  Creates a new throttled save function for a room and stores it in  __throttledSaveFnMap__.</br>
    *  Called once immediately on the first invocation, then once after __wait__ milliseconds; Guaranteed save every __maxWait__ milliseconds;</br>
    *  To be used when the room is created, and used only for that room.</br>
+   *  Will keep the deleted elements in the snapshot when saving.</br>
    *  Use __cancelThrottledSave__ to cancel this function.</br>
    *  Use __flushThrottledSave__ to invoke this function immediately.
    */
@@ -573,7 +578,7 @@ export class Server {
     this.logger.verbose?.(`Throttled save just canceled for '${roomId}'`);
   }
 
-  private async flushThrottledSave(roomId: string) {
+  private async flushThrottledSave(roomId: string, keepDeleted: boolean) {
     const throttledSaveFn = this.throttledSaveFnMap.get(roomId);
 
     if (!throttledSaveFn) {
@@ -585,6 +590,11 @@ export class Server {
 
     this.logger.verbose?.(`Throttled save just flushed for '${roomId}'`);
     await throttledSaveFn.flush();
+
+    if (!keepDeleted) {
+      this.logger.verbose?.(`Dropping the deleted element from '${roomId}'`);
+      await this.saveRoom(roomId, false);
+    }
   }
 
   private notifyRoomSaveResult(roomId: string, isSaved: boolean, error = '') {
@@ -615,9 +625,15 @@ export class Server {
 
     return snapshotContent;
   }
-
+  /**
+   * Saves the room snapshot to the DB.
+   * @param roomId
+   * @param keepDeleted - if true, deleted elements will be kept in the snapshot; useful when the room is being deleted and we want to drop the deleted elements (undoable actions)
+   * @returns An object with hasSaved flag and an optional error message
+   */
   private async saveRoom(
     roomId: string,
+    keepDeleted: boolean = true,
   ): Promise<{ hasSaved: boolean; error?: string }> {
     const snapshot = this.snapshots.get(roomId);
     if (!snapshot) {
@@ -627,7 +643,7 @@ export class Server {
       return { hasSaved: false, error: 'No snapshot found' };
     }
 
-    const cleanContent = prepareContentForSave(snapshot);
+    const cleanContent = prepareContentForSave(snapshot, keepDeleted);
     const { data } = await this.utilService.save(roomId, cleanContent);
     if (isSaveErrorData(data)) {
       this.logger.error(`Failed to save room '${roomId}': ${data.error}`);

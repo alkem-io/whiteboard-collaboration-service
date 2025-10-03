@@ -17,7 +17,7 @@ export const handleElasticError = (error: unknown): HandledElasticError => {
   if (isElasticResponseError(error)) {
     // not really how to handle multiple status codes
     const status = Number(
-      Object.keys(error.meta.statusCode)?.[0] ?? UNKNOWN_STATUS
+      Object.keys(error.meta.statusCode)?.[0] ?? UNKNOWN_STATUS,
     );
     return {
       message: error.message,

@@ -21,3 +21,5 @@ export const IDLE_STATE = 'idle-state';
 export const INIT_ROOM = 'init-room';
 export const JOIN_ROOM = 'join-room';
 export const ROOM_USER_CHANGE = 'room-user-change';
+// system messages
+export const PING = 'ping';
