@@ -1,6 +1,6 @@
 {
   "name": "whiteboard-collaboration-service",
-  "version": "0.6.3",
+  "version": "0.6.4",
   "description": "Alkemio Whiteboard Collaboration Service for Excalidraw backend",
   "author": "Alkemio Foundation",
   "private": false,
@@ -16,7 +16,7 @@
     "test": "jest"
   },
   "dependencies": {
-    "@elastic/elasticsearch": "9.1.1",
+    "@elastic/elasticsearch": "8.17.1",
     "@nestjs/common": "^11.1.6",
     "@nestjs/config": "^4.0.2",
     "@nestjs/core": "^11.1.6",
