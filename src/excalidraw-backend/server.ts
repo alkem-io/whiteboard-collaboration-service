@@ -308,9 +308,8 @@ export class Server {
         idleStateEventHandler(roomID, data, socket, this.logger),
       );
 
-      socket.on(DISCONNECTING, async (reason, description) => {
+      socket.on(DISCONNECTING, async () => {
         await disconnectingEventHandler(this.wsServer, socket, this.logger);
-        this.logDisconnectReason(DISCONNECTING, reason, description);
       });
       socket.on(DISCONNECT, (reason, description: DisconnectDescription) => {
         disconnectEventHandler(socket);
