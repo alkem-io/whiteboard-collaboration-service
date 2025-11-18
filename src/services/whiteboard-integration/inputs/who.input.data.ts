@@ -5,6 +5,7 @@ export class WhoInputData extends BaseInputData {
     public auth: {
       cookie?: string;
       authorization?: string;
+      guestName?: string;
     },
   ) {
     super('who-input');
