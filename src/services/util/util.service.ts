@@ -64,7 +64,7 @@ export class UtilService {
       return this.integrationService.who(new WhoInputData({ cookie }));
     }
 
-    return { id: '', email: '' };
+    return { id: '', email: '', guestName: '' };
   }
 
   public getUserInfoForRoom(
