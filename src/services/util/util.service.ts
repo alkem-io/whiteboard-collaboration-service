@@ -55,7 +55,7 @@ export class UtilService {
     if (guestName) {
       return this.integrationService.who(
         new WhoInputData({
-          guestName: guestName,
+          guestName,
         }),
       );
     }
