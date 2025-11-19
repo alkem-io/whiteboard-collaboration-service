@@ -6,7 +6,11 @@ export const initUserDataMiddleware: SimpleMiddlewareHandler = (
   socket: SocketIoSocket,
   next: (err?: Error) => void,
 ) => {
-  socket.data.userInfo = { id: 'not-initialized', email: 'not-initialized' };
+  socket.data.userInfo = {
+    id: 'not-initialized',
+    email: 'not-initialized',
+    guestName: 'not-initialized',
+  };
   socket.data.lastContributed = -1;
   socket.data.lastPresence = -1;
 

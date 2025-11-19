@@ -44,14 +44,18 @@ export const authorizeWithRoomOrFailAndJoinHandler = async (
   socket: SocketIoSocket,
   wsServer: SocketIoServer,
   logger: LoggerService,
-  getRoomInfo: (roomId: string, userId: string) => Promise<UserInfoForRoom>,
+  getRoomInfo: (
+    roomId: string,
+    userId: string,
+    guestName?: string,
+  ) => Promise<UserInfoForRoom>,
 ) => {
   const userInfo = socket.data.userInfo;
   const {
     read: canRead,
     update: canUpdate,
     maxCollaborators,
-  } = await getRoomInfo(roomID, userInfo.id);
+  } = await getRoomInfo(roomID, userInfo.id, userInfo.guestName);
 
   if (!canRead) {
     throw new UnauthorizedReadAccess();
