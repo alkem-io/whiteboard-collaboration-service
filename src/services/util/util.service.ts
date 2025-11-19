@@ -52,16 +52,16 @@ export class UtilService {
       return this.integrationService.who(new WhoInputData({ authorization }));
     }
 
+    if (cookie) {
+      return this.integrationService.who(new WhoInputData({ cookie }));
+    }
+
     if (guestName) {
       return this.integrationService.who(
         new WhoInputData({
           guestName,
         }),
       );
-    }
-
-    if (cookie) {
-      return this.integrationService.who(new WhoInputData({ cookie }));
     }
 
     return { id: '', email: '', guestName: '' };
