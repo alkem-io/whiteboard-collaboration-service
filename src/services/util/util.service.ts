@@ -44,22 +44,43 @@ export class UtilService {
   public async getUserInfo(opts: {
     cookie?: string;
     authorization?: string;
+    guestName?: string;
   }): Promise<UserInfo | never> {
-    const { cookie, authorization } = opts;
+    const { cookie, authorization, guestName } = opts;
     // we want to choose the authorization with priority
     if (authorization) {
       return this.integrationService.who(new WhoInputData({ authorization }));
     }
 
+    // the cookie is always present and in order not to put it with lowest priority we need to check the result
     if (cookie) {
-      return this.integrationService.who(new WhoInputData({ cookie }));
+      const cookieResult = await this.integrationService.who(
+        new WhoInputData({ cookie }),
+      );
+      if (cookieResult.id && cookieResult.email) {
+        return cookieResult;
+      }
     }
 
-    return { id: '', email: '' };
+    if (guestName) {
+      return this.integrationService.who(
+        new WhoInputData({
+          guestName,
+        }),
+      );
+    }
+
+    return { id: '', email: '', guestName: '' };
   }
 
-  public getUserInfoForRoom(userId: string, roomId: string) {
-    return this.integrationService.info(new InfoInputData(userId, roomId));
+  public getUserInfoForRoom(
+    userId: string,
+    roomId: string,
+    guestName?: string,
+  ) {
+    return this.integrationService.info(
+      new InfoInputData(userId, roomId, guestName),
+    );
   }
 
   public contentModified(userId: string, roomId: string) {

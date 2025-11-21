@@ -228,8 +228,8 @@ export class Server {
             socket,
             this.wsServer,
             this.logger,
-            (roomId, userId) =>
-              this.utilService.getUserInfoForRoom(userId, roomId),
+            (roomId, userId, guestName) =>
+              this.utilService.getUserInfoForRoom(userId, roomId, guestName),
           );
         } catch (e: any) {
           if (e instanceof UnauthorizedReadAccess) {
@@ -407,6 +407,7 @@ export class Server {
     return this.utilService.getUserInfo({
       authorization: socket.handshake.headers.authorization,
       cookie: socket.handshake.headers.cookie,
+      guestName: socket.handshake.auth.guestName,
     });
   }
 
