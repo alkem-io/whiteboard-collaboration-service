@@ -49,7 +49,13 @@ export class UtilService {
     const { cookie, authorization, guestName } = opts;
     // we want to choose the authorization with priority
     if (authorization) {
-      return this.integrationService.who(new WhoInputData({ authorization }));
+      const authorizationResult = await this.integrationService.who(
+        new WhoInputData({ authorization }),
+      );
+
+      if (authorizationResult.id && authorizationResult.email) {
+        return authorizationResult;
+      }
     }
 
     // the cookie is always present and in order not to put it with lowest priority we need to check the result
