@@ -51,6 +51,7 @@ export interface ConfigType {
       save_interval: number;
       collaborator_inactivity: number;
       reset_collaborator_mode_debounce: number;
+      permission_check_interval: number;
     };
     rest: {
       port: number;
