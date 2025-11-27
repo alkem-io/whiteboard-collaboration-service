@@ -9,6 +9,7 @@ import {
   CONNECTION,
   defaultCollaboratorInactivity,
   defaultContributionInterval,
+  defaultPermissionCheckInterval,
   defaultSaveInterval,
   DISCONNECT,
   DisconnectDescription,
@@ -75,12 +76,14 @@ export class Server {
 
   private readonly contributionTrackers: RoomTrackers = new Map();
   private readonly collaboratorInactivityTrackers: SocketTrackers = new Map();
+  private readonly permissionCheckTrackers: SocketTrackers = new Map();
   // todo: try WeakMap or better yet - WeakSet
   private readonly throttledSaveFnMap: ThrottledSaveFunctionMap = new Map();
 
   private readonly contributionWindowMs: number;
   private readonly saveIntervalMs: number;
   private readonly collaboratorInactivityMs: number;
+  private readonly permissionCheckIntervalMs: number;
 
   private snapshots: Map<string, InMemorySnapshot> = new Map();
 
@@ -105,13 +108,19 @@ export class Server {
       )
       .catch((err) => this.logger.error(err));
 
-    const { contribution_window, save_interval, collaborator_inactivity } =
-      this.configService.get('settings.collaboration', { infer: true });
+    const {
+      contribution_window,
+      save_interval,
+      collaborator_inactivity,
+      permission_check_interval,
+    } = this.configService.get('settings.collaboration', { infer: true });
 
     this.contributionWindowMs =
       (contribution_window ?? defaultContributionInterval) * 1000;
     this.collaboratorInactivityMs =
       (collaborator_inactivity ?? defaultCollaboratorInactivity) * 1000;
+    this.permissionCheckIntervalMs =
+      (permission_check_interval ?? defaultPermissionCheckInterval) * 1000;
 
     this.saveIntervalMs = save_interval ?? defaultSaveInterval;
   }
@@ -255,6 +264,8 @@ export class Server {
         await this.loadSnapshot(roomID);
         // send scene init to the socket
         await this.initSceneForSocket(socket, roomID);
+        // start permission check tracker for the socket
+        this.startPermissionCheckForSocket(socket, roomID);
         // attach collaborator handler if applicable
         if (socket.data.collaborator) {
           this.startCollaboratorInactivityTrackerForSocket(socket);
@@ -314,6 +325,7 @@ export class Server {
       socket.on(DISCONNECT, (reason, description: DisconnectDescription) => {
         disconnectEventHandler(socket);
         this.deleteCollaboratorInactivityTrackerForSocket(socket);
+        this.deletePermissionCheckTrackerForSocket(socket);
         this.logDisconnectReason(DISCONNECT, reason, description);
       });
     });
@@ -512,6 +524,93 @@ export class Server {
     resetCollaboratorModeDebounceWait,
     { leading: true, trailing: false },
   );
+
+  private startPermissionCheckForSocket(
+    socket: SocketIoSocket,
+    roomId: string,
+  ) {
+    // skip if permission checking is disabled
+    if (this.permissionCheckIntervalMs <= 0) {
+      return;
+    }
+    // exit if already exists
+    if (this.permissionCheckTrackers.get(socket.id)) {
+      return;
+    }
+
+    const ac = new AbortController();
+
+    (async () => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      for await (const _ of setInterval(this.permissionCheckIntervalMs, null, {
+        signal: ac.signal,
+      })) {
+        await this.checkAndUpdatePermissions(socket, roomId);
+      }
+    })().catch((e) => {
+      if (isAbortError(e)) {
+        this.logger.verbose?.(
+          `Permission check tracker for user '${socket.data.userInfo.email}' was aborted with reason '${e.cause}'`,
+        );
+      } else {
+        this.logger.error?.(
+          `Permission check tracker for user '${socket.data.userInfo.email}' failed: ${e.message}`,
+        );
+      }
+    });
+
+    this.permissionCheckTrackers.set(socket.id, ac);
+    this.logger.verbose?.(
+      `Started permission check tracker for user '${socket.data.userInfo.email}' in room '${roomId}'`,
+    );
+  }
+
+  private async checkAndUpdatePermissions(
+    socket: SocketIoSocket,
+    roomId: string,
+  ) {
+    const { read: canRead, update: canUpdate } =
+      await this.utilService.getUserInfoForRoom(
+        socket.data.userInfo.id,
+        roomId,
+        socket.data.userInfo.guestName,
+      );
+
+    // if read access was revoked, disconnect the socket
+    if (!canRead) {
+      this.logger.warn?.(
+        `User '${socket.data.userInfo.email}' read access revoked for room '${roomId}' - disconnecting`,
+      );
+      this.deletePermissionCheckTrackerForSocket(socket);
+      closeConnectionWithError(socket, ERROR_EVENTS.ROOM_NO_READ_ACCESS);
+      return;
+    }
+
+    // if update access was revoked but user was a collaborator, downgrade to read-only
+    if (!canUpdate && socket.data.collaborator) {
+      this.logger.warn?.(
+        `User '${socket.data.userInfo.email}' update access revoked for room '${roomId}' - setting to read-only`,
+      );
+      socket.data.collaborator = false;
+      socket.removeAllListeners(SERVER_BROADCAST);
+      this.deleteCollaboratorInactivityTrackerForSocket(socket);
+      this.wsServer.to(socket.id).emit(COLLABORATOR_MODE, {
+        mode: 'read',
+        reason: CollaboratorModeReasons.PERMISSION_REVOKED,
+      });
+    }
+  }
+
+  private deletePermissionCheckTrackerForSocket(socket: SocketIoSocket) {
+    const abortController = this.permissionCheckTrackers.get(socket.id);
+    if (abortController) {
+      abortController.abort('deleted');
+      this.permissionCheckTrackers.delete(socket.id);
+      this.logger.verbose?.(
+        `Deleted permission check tracker for user '${socket.data.userInfo.email}'`,
+      );
+    }
+  }
 
   public async initSceneForSocket(socket: SocketIoSocket, roomId: string) {
     const snapshot = await this.loadSnapshot(roomId);
