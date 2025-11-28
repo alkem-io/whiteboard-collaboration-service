@@ -78,6 +78,9 @@ settings:
     # you want it to be large enough to not reset too frequently,
     # but small enough to be accurate
     reset_collaborator_mode_debounce: ${INACTIVITY_DEBOUNCE}:1000
+    # SECONDS between permission re-checks for connected sockets;
+    # set to 0 to disable permission re-checking
+    permission_check_interval: ${PERMISSION_CHECK_INTERVAL}:30
   rest:
     # the REST API
     port: ${REST_PORT}:4005
