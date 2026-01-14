@@ -1,46 +1,55 @@
-# Stage 1: Build the application
-FROM node:22-bookworm AS build
+# ======================
+# Builder stage (dev deps)
+# ======================
+FROM node:22.20.0-bookworm AS builder
 
-WORKDIR /usr/src/app
+WORKDIR /app
 
-# Copy package files first to leverage Docker cache
+# Dependency manifests
 COPY package*.json ./
 
-# Install all dependencies (including devDependencies) for building
+# Deterministic install (includes dev deps)
 RUN npm ci
 
-# Copy the rest of the application source code
-COPY . .
+# Build inputs
+COPY tsconfig*.json ./
+COPY src ./src
+COPY config.yml .
 
-# Build the application
+# Build TypeScript → dist
 RUN npm run build
 
-# Remove devDependencies to reduce image size
-RUN npm prune --production
 
-# Stage 2: Create the production image
-# Use distroless image for smaller size and better security
+# ======================
+# Prod deps stage (NO dev deps)
+# ======================
+FROM node:22.20.0-bookworm AS prod-deps
+
+WORKDIR /app
+
+COPY package*.json ./
+
+RUN npm ci --omit=dev \
+ && npm cache clean --force
+
+
+# ======================
+# Runtime stage (distroless)
+# ======================
 FROM gcr.io/distroless/nodejs22-debian12
 
-WORKDIR /usr/src/app
+WORKDIR /app
 
-# Copy built application from the build stage
-COPY --from=build --chown=nonroot:nonroot /usr/src/app/dist ./dist
-COPY --from=build --chown=nonroot:nonroot /usr/src/app/node_modules ./node_modules
+ENV NODE_ENV=production
 
-# Copy necessary configuration files
-COPY --from=build --chown=nonroot:nonroot /usr/src/app/config.yml ./config.yml
+# Copy only what is needed at runtime
+COPY --from=prod-deps /app/node_modules ./node_modules
+COPY --from=builder  /app/dist ./dist
+COPY --from=builder  /app/config.yml ./config.yml
+COPY --from=builder  /app/package.json ./package.json
 
-# Set environment variables
-ARG ENV_ARG=production
-ENV NODE_ENV=${ENV_ARG}
-ENV NODE_OPTIONS="--max-old-space-size=4096"
-
-# Explicitly define the user (good practice)
-USER nonroot
-
-# Expose the application port
+# Distroless runs as non-root by default
 EXPOSE 4002
 
-# Start the application
+# No shell, direct execution
 CMD ["dist/main.js"]
