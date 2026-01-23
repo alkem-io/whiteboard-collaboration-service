@@ -18,7 +18,7 @@ spec:
     spec:
       containers:
         - name: alkemio-whiteboard-collaboration-service
-          image: alkemio.azurecr.io/alkemio-whiteboard-collaboration-service:latest
+          image: rg.nl-ams.scw.cloud/alkemio/alkemio-whiteboard-collaboration-service:latest
           env:
             - name: RABBITMQ_HOST
               valueFrom:
