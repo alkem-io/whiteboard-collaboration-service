@@ -36,17 +36,18 @@ RUN npm ci --omit=dev \
 # ======================
 # Runtime stage (distroless)
 # ======================
-FROM gcr.io/distroless/nodejs22-debian12
+FROM gcr.io/distroless/nodejs22-debian12:nonroot
 
 WORKDIR /app
 
 ENV NODE_ENV=production
 
 # Copy only what is needed at runtime
-COPY --from=prod-deps /app/node_modules ./node_modules
-COPY --from=builder  /app/dist ./dist
-COPY --from=builder  /app/config.yml ./config.yml
-COPY --from=builder  /app/package.json ./package.json
+# The hardcoded UID/GID 65532:65532 corresponds to the 'nonroot' user in the distroless image
+COPY --from=prod-deps --chown=65532:65532 /app/node_modules ./node_modules
+COPY --from=builder --chown=65532:65532 /app/dist ./dist
+COPY --from=builder --chown=65532:65532 /app/config.yml ./config.yml
+COPY --from=builder --chown=65532:65532 /app/package.json ./package.json
 
 # Distroless runs as non-root by default
 EXPOSE 4002
