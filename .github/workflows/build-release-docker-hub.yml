@@ -1,3 +1,6 @@
+# Builds and publishes multi-architecture Docker images to Docker Hub.
+# Triggered only on GitHub releases (not PRs or pushes), so push/login
+# operations are always safe to execute unconditionally.
 name: Deploy to DockerHub
 
 on:
@@ -15,11 +18,13 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
+          # Image name derived from repo name (e.g., alkemio/whiteboard-collaboration-service)
           images: alkemio/${{ github.event.repository.name }}
           tags: |
             type=semver,pattern=v{{version}}
             type=semver,pattern=v{{major}}.{{minor}}
             type=semver,pattern=v{{major}}
+            # Only tag as 'latest' for stable releases, not prereleases
             type=raw,value=latest,enable=${{ github.event.release.prerelease == false }}
             type=sha,prefix=sha-
 
