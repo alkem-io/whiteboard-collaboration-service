@@ -12,7 +12,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read    # Required for actions/checkout
-      actions: write    # Required for cache-to: type=gha
     steps:
       - name: Checkout
         uses: actions/checkout@v6.0.2
@@ -52,9 +51,11 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          # GitHub Actions cache for faster builds
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # Registry cache - persists indefinitely on Docker Hub (no 7-day expiry)
+          # Pull cache from registry (visible in logs as "importing cache manifest")
+          cache-from: type=registry,ref=alkemio/${{ github.event.repository.name }}:buildcache
+          # Push cache to registry (visible in logs as "exporting cache")
+          cache-to: type=registry,ref=alkemio/${{ github.event.repository.name }}:buildcache,mode=max
           # SLSA provenance attestation for supply chain security
           provenance: mode=max
           # A machine-readable inventory of all components, libraries, and dependencies in your container image. It lists package names, versions,
