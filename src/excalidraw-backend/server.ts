@@ -213,7 +213,7 @@ export class Server {
 
     this.wsServer.on(CONNECTION, async (socket: SocketIoSocket) => {
       this.logger.verbose?.(
-        `User '${socket.data.userInfo.email}' established connection`,
+        `User '${socket.data.userInfo.id}' established connection`,
       );
 
       socket.on(PING, (ack) => ack());
@@ -243,13 +243,13 @@ export class Server {
         } catch (e: any) {
           if (e instanceof UnauthorizedReadAccess) {
             this.logger.warn?.(
-              `User '${socket.data.userInfo.email}' insufficient read access to Whiteboard: '${roomID}'`,
+              `User '${socket.data.userInfo.id}' insufficient read access to Whiteboard: '${roomID}'`,
             );
             closeConnectionWithError(socket, ERROR_EVENTS.ROOM_NO_READ_ACCESS);
             return;
           }
           this.logger.error(
-            `Error while trying to authorize User '${socket.data.userInfo.email}' with Whiteboard: '${roomID}'`,
+            `Error while trying to authorize User '${socket.data.userInfo.id}' with Whiteboard: '${roomID}'`,
             e.stack,
           );
           closeConnectionWithError(socket, ERROR_EVENTS.GENERIC_ERROR);
@@ -257,7 +257,7 @@ export class Server {
         }
         // log results
         this.logger.verbose?.(
-          `User '${socket.data.userInfo.email}' read=${socket.data.viewer}, update=${socket.data.collaborator}`,
+          `User '${socket.data.userInfo.id}' read=${socket.data.viewer}, update=${socket.data.collaborator}`,
         );
 
         // load snapshot
@@ -290,7 +290,7 @@ export class Server {
 
             this.utilService.reportChanges(
               roomID,
-              socket.data.userInfo.email,
+              socket.data.userInfo.id,
               (this.snapshots.get(roomID)?.content.elements ??
                 []) as ExcalidrawElement[],
               eventData.payload.elements as ExcalidrawElement[],
@@ -385,11 +385,10 @@ export class Server {
         if (lastContributed >= windowStart && windowEnd >= lastContributed) {
           return {
             id: socket.data.userInfo.id,
-            email: socket.data.userInfo.email,
           };
         }
       })
-      .filter((item): item is { id: string; email: string } => !!item);
+      .filter((item): item is { id: string } => !!item);
 
     this.logger.verbose?.(
       `Registering contributions for ${users.length} users in room '${roomId}'`,
@@ -437,7 +436,7 @@ export class Server {
   private createCollaboratorInactivityTracker(socket: SocketIoSocket) {
     const cb = () => {
       this.logger.verbose?.(
-        `User '${socket.data.userInfo.email}' was inactive ${this.collaboratorInactivityMs / 1000} seconds, setting collaborator mode to 'read' for user '${socket.data.userInfo.email}'`,
+        `User '${socket.data.userInfo.id}' was inactive ${this.collaboratorInactivityMs / 1000} seconds, setting collaborator mode to 'read' for user '${socket.data.userInfo.id}'`,
       );
       // User is inactive, setting collaborator mode to 'read'
       // todo move emit, removeAllListeners, socket.data
@@ -460,11 +459,11 @@ export class Server {
     })().catch((e) => {
       if (isAbortError(e)) {
         this.logger.verbose?.(
-          `Collaborator inactivity tracker for user '${socket.data.userInfo.email}' was aborted with reason '${e.cause}'`,
+          `Collaborator inactivity tracker for user '${socket.data.userInfo.id}' was aborted with reason '${e.cause}'`,
         );
       } else {
         this.logger.error?.(
-          `Collaborator inactivity tracker for user '${socket.data.userInfo.email}' failed: ${e.message}`,
+          `Collaborator inactivity tracker for user '${socket.data.userInfo.id}' failed: ${e.message}`,
         );
       }
     });
@@ -485,7 +484,7 @@ export class Server {
     this.collaboratorInactivityTrackers.set(socket.id, abortController);
     if (logging) {
       this.logger.verbose?.(
-        `Created collaborator inactivity tracker for user '${socket.data.userInfo.email}'`,
+        `Created collaborator inactivity tracker for user '${socket.data.userInfo.id}'`,
       );
     }
   }
@@ -501,7 +500,7 @@ export class Server {
 
       if (logging) {
         this.logger.verbose?.(
-          `Deleted collaborator inactivity tracker for user '${socket.data.userInfo.email}'`,
+          `Deleted collaborator inactivity tracker for user '${socket.data.userInfo.id}'`,
         );
       }
     }
@@ -550,18 +549,18 @@ export class Server {
     })().catch((e) => {
       if (isAbortError(e)) {
         this.logger.verbose?.(
-          `Permission check tracker for user '${socket.data.userInfo.email}' was aborted with reason '${e.cause}'`,
+          `Permission check tracker for user '${socket.data.userInfo.id}' was aborted with reason '${e.cause}'`,
         );
       } else {
         this.logger.error?.(
-          `Permission check tracker for user '${socket.data.userInfo.email}' failed: ${e.message}`,
+          `Permission check tracker for user '${socket.data.userInfo.id}' failed: ${e.message}`,
         );
       }
     });
 
     this.permissionCheckTrackers.set(socket.id, ac);
     this.logger.verbose?.(
-      `Started permission check tracker for user '${socket.data.userInfo.email}' in room '${roomId}'`,
+      `Started permission check tracker for user '${socket.data.userInfo.id}' in room '${roomId}'`,
     );
   }
 
@@ -579,7 +578,7 @@ export class Server {
     // if read access was revoked, disconnect the socket
     if (!canRead) {
       this.logger.warn?.(
-        `User '${socket.data.userInfo.email}' read access revoked for room '${roomId}' - disconnecting`,
+        `User '${socket.data.userInfo.id}' read access revoked for room '${roomId}' - disconnecting`,
       );
       this.deletePermissionCheckTrackerForSocket(socket);
       closeConnectionWithError(socket, ERROR_EVENTS.ROOM_NO_READ_ACCESS);
@@ -589,7 +588,7 @@ export class Server {
     // if update access was revoked but user was a collaborator, downgrade to read-only
     if (!canUpdate && socket.data.collaborator) {
       this.logger.warn?.(
-        `User '${socket.data.userInfo.email}' update access revoked for room '${roomId}' - setting to read-only`,
+        `User '${socket.data.userInfo.id}' update access revoked for room '${roomId}' - setting to read-only`,
       );
       socket.data.collaborator = false;
       socket.removeAllListeners(SERVER_BROADCAST);
@@ -607,7 +606,7 @@ export class Server {
       abortController.abort('deleted');
       this.permissionCheckTrackers.delete(socket.id);
       this.logger.verbose?.(
-        `Deleted permission check tracker for user '${socket.data.userInfo.email}'`,
+        `Deleted permission check tracker for user '${socket.data.userInfo.id}'`,
       );
     }
   }
@@ -622,7 +621,7 @@ export class Server {
       },
     };
     this.wsServer.to(socket.id).emit(SCENE_INIT, jsonToArrayBuffer(data));
-    this.logger.verbose?.(`Scene init sent to '${socket.data.userInfo.email}'`);
+    this.logger.verbose?.(`Scene init sent to '${socket.data.userInfo.id}'`);
   }
 
   // todo: move to a helper class

@@ -8,7 +8,6 @@ export const initUserDataMiddleware: SimpleMiddlewareHandler = (
 ) => {
   socket.data.userInfo = {
     id: 'not-initialized',
-    email: 'not-initialized',
     guestName: 'not-initialized',
   };
   socket.data.lastContributed = -1;

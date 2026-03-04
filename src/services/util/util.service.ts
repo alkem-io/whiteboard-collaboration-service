@@ -53,7 +53,7 @@ export class UtilService {
         new WhoInputData({ authorization }),
       );
 
-      if (authorizationResult.id && authorizationResult.email) {
+      if (authorizationResult.id) {
         return authorizationResult;
       }
     }
@@ -63,7 +63,7 @@ export class UtilService {
       const cookieResult = await this.integrationService.who(
         new WhoInputData({ cookie }),
       );
-      if (cookieResult.id && cookieResult.email) {
+      if (cookieResult.id) {
         return cookieResult;
       }
     }
@@ -76,7 +76,7 @@ export class UtilService {
       );
     }
 
-    return { id: '', email: '', guestName: '' };
+    return { id: '', guestName: '' };
   }
 
   public getUserInfoForRoom(
@@ -95,7 +95,7 @@ export class UtilService {
     );
   }
 
-  public contribution(roomId: string, users: { id: string; email: string }[]) {
+  public contribution(roomId: string, users: { id: string }[]) {
     return this.integrationService.contribution(
       new ContributionInputData(roomId, users),
     );
