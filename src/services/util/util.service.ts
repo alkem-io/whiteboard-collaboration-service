@@ -80,6 +80,7 @@ export class UtilService {
   }
 
   public getUserInfoForRoom(
+    /** Actor ID (interchangeable with user ID) */
     userId: string,
     roomId: string,
     guestName?: string,
@@ -89,6 +90,7 @@ export class UtilService {
     );
   }
 
+  /** @param userId - Actor ID (interchangeable with user ID) */
   public contentModified(userId: string, roomId: string) {
     return this.integrationService.contentModified(
       new ContentModifiedInputData(userId, roomId),

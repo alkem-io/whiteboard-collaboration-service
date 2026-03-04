@@ -7,7 +7,7 @@ export class ContentModifiedInputData extends BaseInputData {
   /**
    * Creates a new ContentModifiedInputData instance.
    *
-   * @param {string} triggeredBy - The user that triggered the content modification.
+   * @param {string} triggeredBy - The actor ID (interchangeable with user ID) that triggered the content modification.
    * @param {string} whiteboardId - The ID of the whiteboard where the content was modified.
    */
   constructor(

@@ -46,6 +46,7 @@ export const authorizeWithRoomOrFailAndJoinHandler = async (
   logger: LoggerService,
   getRoomInfo: (
     roomId: string,
+    /** Actor ID (interchangeable with user ID) */
     userId: string,
     guestName?: string,
   ) => Promise<UserInfoForRoom>,
@@ -126,7 +127,7 @@ export const serverBroadcastEventHandler = (
   roomID: string,
   data: ArrayBuffer,
   socket: SocketIoSocket,
-  registerContentModified: (roomId: string, userId: string) => void,
+  registerContentModified: (roomId: string, /** Actor ID (interchangeable with user ID) */ userId: string) => void,
 ) => {
   if (socket.data.lastContributed === -1) {
     registerContentModified(roomID, socket.data.userInfo.id);
