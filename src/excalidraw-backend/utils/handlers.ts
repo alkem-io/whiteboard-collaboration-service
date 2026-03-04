@@ -46,6 +46,7 @@ export const authorizeWithRoomOrFailAndJoinHandler = async (
   logger: LoggerService,
   getRoomInfo: (
     roomId: string,
+    /** Actor ID (interchangeable with user ID) */
     userId: string,
     guestName?: string,
   ) => Promise<UserInfoForRoom>,
@@ -71,11 +72,11 @@ export const authorizeWithRoomOrFailAndJoinHandler = async (
 
   if (isCollaboratorLimitReached) {
     logger.verbose?.(
-      `Max collaborators limit (${maxCollaboratorsForThisRoom}) reached for room '${roomID}' - user '${userInfo.email}' is read-only`,
+      `Max collaborators limit (${maxCollaboratorsForThisRoom}) reached for room '${roomID}' - user '${userInfo.id}' is read-only`,
     );
   } else {
     logger.verbose?.(
-      `Max collaborators limit NOT reached (${collaboratorsInRoom}/${maxCollaboratorsForThisRoom}) for room '${roomID}' - user '${userInfo.email}' is a collaborator`,
+      `Max collaborators limit NOT reached (${collaboratorsInRoom}/${maxCollaboratorsForThisRoom}) for room '${roomID}' - user '${userInfo.id}' is a collaborator`,
     );
   }
 
@@ -111,7 +112,7 @@ const joinRoomHandler = async (
 
   const { userInfo } = socket.data;
 
-  logger?.verbose?.(`User '${userInfo.email}' has joined room '${roomID}'`);
+  logger?.verbose?.(`User '${userInfo.id}' has joined room '${roomID}'`);
 
   const socketIDs = (await fetchSocketsSafe(wsServer, roomID, logger)).map(
     (socket) => socket.id,
@@ -126,7 +127,10 @@ export const serverBroadcastEventHandler = (
   roomID: string,
   data: ArrayBuffer,
   socket: SocketIoSocket,
-  registerContentModified: (roomId: string, userId: string) => void,
+  registerContentModified: (
+    roomId: string,
+    /** Actor ID (interchangeable with user ID) */ userId: string,
+  ) => void,
 ) => {
   if (socket.data.lastContributed === -1) {
     registerContentModified(roomID, socket.data.userInfo.id);
@@ -173,7 +177,7 @@ export const disconnectingEventHandler = async (
   socket: SocketIoSocket,
   logger: LoggerService,
 ) => {
-  logger?.verbose?.(`User '${socket.data.userInfo.email}' has disconnected`);
+  logger?.verbose?.(`User '${socket.data.userInfo.id}' has disconnected`);
   for (const roomID of socket.rooms) {
     const otherClientIds = (await fetchSocketsSafe(wsServer, roomID, logger))
       .filter((_socket) => _socket.id !== socket.id)
