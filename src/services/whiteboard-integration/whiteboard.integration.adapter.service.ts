@@ -98,7 +98,7 @@ export class WhiteboardIntegrationAdapterService {
     )
       .then((id) => ({ id: id || '' }))
       .catch(() => ({
-        id: 'N/A',
+        id: '',
       }));
   }
 
