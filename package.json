@@ -21,7 +21,7 @@
     "@nestjs/config": "^4.0.2",
     "@nestjs/core": "^11.1.6",
     "@nestjs/microservices": "^11.1.6",
-    "@nestjs/platform-express": "^11.1.6",
+    "@nestjs/platform-express": "^11.1.15",
     "@socket.io/redis-adapter": "^8.3.0",
     "amqp-connection-manager": "^5.0.0",
     "amqplib": "^0.10.9",
