@@ -91,14 +91,15 @@ export class WhiteboardIntegrationAdapterService {
     );
   }
 
-  public async who(data: WhoInputData) {
-    return this.sendWithResponse<UserInfo, WhoInputData>(
+  public async who(data: WhoInputData): Promise<UserInfo> {
+    return this.sendWithResponse<string, WhoInputData>(
       WhiteboardIntegrationMessagePattern.WHO,
       data,
-    ).catch(() => ({
-      id: 'N/A',
-      email: 'N/A',
-    }));
+    )
+      .then((id) => ({ id: id || '' }))
+      .catch(() => ({
+        id: '',
+      }));
   }
 
   public async info(data: InfoInputData) {
