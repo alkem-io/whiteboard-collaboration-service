@@ -8,7 +8,7 @@ on:
 
 jobs:
   build:
-    runs-on: arc-runner-set
+    runs-on: alkemio-m4-1
     steps:
       - name: Checkout
         uses: actions/checkout@v6
