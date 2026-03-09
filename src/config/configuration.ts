@@ -27,6 +27,7 @@ export default () => {
 function buildYamlNodeValue(nodeValue: any, envConfig: any) {
   let updatedNodeValue = nodeValue;
   const key = `${nodeValue}`;
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: regex for matching YAML env var placeholders like ${VAR}:default
   const regex = '\\${(.*)}:?(.*)';
   const found = key.match(regex);
   if (found) {
@@ -37,6 +38,7 @@ function buildYamlNodeValue(nodeValue: any, envConfig: any) {
 
     if (updatedNodeValue.toLowerCase() === 'true') return true;
     if (updatedNodeValue.toLowerCase() === 'false') return false;
+    // biome-ignore lint/suspicious/noGlobalIsNan: intentional type coercion to check if string is numeric
     if (!isNaN(updatedNodeValue)) return Number(updatedNodeValue);
   }
 

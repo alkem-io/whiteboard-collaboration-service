@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
-import { HealthController } from './health.controller';
 import { WhiteboardIntegrationModule } from '../whiteboard-integration/whiteboard.integration.module';
+import { HealthController } from './health.controller';
 
 @Module({
   imports: [WhiteboardIntegrationModule],

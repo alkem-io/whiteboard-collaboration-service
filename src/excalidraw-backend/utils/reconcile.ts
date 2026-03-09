@@ -1,5 +1,5 @@
-import { arrayToMap } from './array.to.map';
 import { ExcalidrawElement } from '../../excalidraw/types';
+import { arrayToMap } from './array.to.map';
 import { orderByFractionalIndex } from './fractionalIndex';
 
 /**

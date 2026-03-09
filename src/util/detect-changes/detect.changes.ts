@@ -22,7 +22,7 @@ export type DetectedChanges<T extends Identifiable> = {
   }>;
 };
 
-export const enum DetectedChangesType {
+export enum DetectedChangesType {
   inserted = 'inserted',
   updated = 'updated',
   deleted = 'deleted',
@@ -53,21 +53,21 @@ export const detectChanges = (
   }
   // if new is empty, all oldArr are deleted
   if (newLen === 0) {
-    return { deleted: oldArrInput.map((item) => ({ id: item.id })) };
+    return { deleted: oldArrInput.map(item => ({ id: item.id })) };
   }
 
   // filter out the fields we want to ignore
-  const newArr = newArrInput.map((item) =>
+  const newArr = newArrInput.map(item =>
     removeFields(item, fieldsToIgnore ?? []),
   );
 
-  const oldArr = oldArrInput.map((item) =>
+  const oldArr = oldArrInput.map(item =>
     removeFields(item, fieldsToIgnore ?? []),
   );
 
   const changes: DetectedChanges<ExcalidrawElement> = {};
 
-  const oldMap = new Map(oldArr.map((item) => [item.id, item]));
+  const oldMap = new Map(oldArr.map(item => [item.id, item]));
   for (const newItem of newArr) {
     const oldItem = oldMap.get(newItem.id);
     // if the new item is not in the old array, it is inserted
@@ -124,7 +124,7 @@ function removeFields<T extends object, K extends keyof T>(
   fields: K[],
 ): T {
   const result = { ...obj };
-  fields.forEach((field) => {
+  fields.forEach(field => {
     delete result[field];
   });
   return result;

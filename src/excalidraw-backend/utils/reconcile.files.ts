@@ -1,5 +1,5 @@
-import { DeepReadonly } from './deep.readonly';
 import { ExcalidrawElement, ExcalidrawFileStore } from '../../excalidraw/types';
+import { DeepReadonly } from './deep.readonly';
 
 export const reconcileFiles = (
   _localElements: readonly ExcalidrawElement[],

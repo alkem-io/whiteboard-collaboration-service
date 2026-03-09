@@ -1,8 +1,16 @@
 import { Inject, Injectable, LoggerService } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
-import { WhiteboardIntegrationService } from '../whiteboard-integration/whiteboard.integration.service';
-import { UserInfo } from '../whiteboard-integration/user.info';
+import {
+  ConfigType,
+  WhiteboardEventLoggingMode,
+  WhiteboardEventLoggingModeType,
+} from '../../config';
+import { ExcalidrawContent, ExcalidrawElement } from '../../excalidraw/types';
+import { DeepReadonly } from '../../excalidraw-backend/utils';
+import { excalidrawInitContent } from '../../util';
+import { detectChanges } from '../../util/detect-changes/detect.changes';
+import { ElasticsearchService } from '../elasticsearch/elasticsearch.service';
 import {
   ContentModifiedInputData,
   ContributionInputData,
@@ -11,17 +19,9 @@ import {
   SaveInputData,
   WhoInputData,
 } from '../whiteboard-integration/inputs';
-import { ExcalidrawContent, ExcalidrawElement } from '../../excalidraw/types';
-import { excalidrawInitContent } from '../../util';
-import { DeepReadonly } from '../../excalidraw-backend/utils';
 import { isFetchErrorData } from '../whiteboard-integration/outputs';
-import { detectChanges } from '../../util/detect-changes/detect.changes';
-import { ElasticsearchService } from '../elasticsearch/elasticsearch.service';
-import {
-  ConfigType,
-  WhiteboardEventLoggingMode,
-  WhiteboardEventLoggingModeType,
-} from '../../config';
+import { UserInfo } from '../whiteboard-integration/user.info';
+import { WhiteboardIntegrationService } from '../whiteboard-integration/whiteboard.integration.service';
 
 @Injectable()
 export class UtilService {

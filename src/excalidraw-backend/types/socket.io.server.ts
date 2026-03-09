@@ -1,22 +1,22 @@
 import { Server } from 'socket.io';
-import { SocketData } from './socket.data';
+import { CollaboratorModeReasons } from './collaboration.mode.reasons';
 import {
   CLIENT_BROADCAST,
   COLLABORATOR_MODE,
   CONNECTION,
   IDLE_STATE,
   INIT_ROOM,
-  ROOM_USER_CHANGE,
+  PING,
+  ROOM_NOT_SAVED,
   ROOM_SAVED,
+  ROOM_USER_CHANGE,
   SCENE_INIT,
   SERVER_BROADCAST,
   SERVER_SIDE_ROOM_DELETED,
   SERVER_VOLATILE_BROADCAST,
-  ROOM_NOT_SAVED,
-  PING,
 } from './event.names';
+import { SocketData } from './socket.data';
 import { SocketIoSocket } from './socket.io.socket';
-import { CollaboratorModeReasons } from './collaboration.mode.reasons';
 
 type ListenEvents = {
   [CONNECTION]: (socket: SocketIoSocket) => void;

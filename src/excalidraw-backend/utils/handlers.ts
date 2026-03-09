@@ -1,21 +1,19 @@
 import { LoggerService } from '@nestjs/common';
 import {
-  SocketIoSocket,
-  SocketIoServer,
-  CollaboratorModeReasons,
-  UserInfoForRoom,
-} from '../types';
-import {
   CLIENT_BROADCAST,
   COLLABORATOR_MODE,
+  CollaboratorModeReasons,
   IDLE_STATE,
+  minCollaboratorsInRoom,
   ROOM_USER_CHANGE,
+  SocketIoServer,
+  SocketIoSocket,
+  UserInfoForRoom,
 } from '../types';
-import { minCollaboratorsInRoom } from '../types';
 import { IdleStatePayload } from '../types/events';
-import { closeConnection } from './util';
-import { tryDecodeBinary, tryDecodeIncoming } from './decode.incoming';
 import { UnauthorizedReadAccess } from '../types/exceptions';
+import { tryDecodeBinary, tryDecodeIncoming } from './decode.incoming';
+import { closeConnection } from './util';
 
 const fetchSocketsSafe = async (
   wsServer: SocketIoServer,
@@ -66,7 +64,7 @@ export const authorizeWithRoomOrFailAndJoinHandler = async (
 
   const collaboratorsInRoom = (
     await fetchSocketsSafe(wsServer, roomID, logger)
-  ).filter((socket) => socket.data.collaborator).length;
+  ).filter(socket => socket.data.collaborator).length;
   const isCollaboratorLimitReached =
     collaboratorsInRoom >= maxCollaboratorsForThisRoom;
 
@@ -115,7 +113,7 @@ const joinRoomHandler = async (
   logger?.verbose?.(`User '${userInfo.id}' has joined room '${roomID}'`);
 
   const socketIDs = (await fetchSocketsSafe(wsServer, roomID, logger)).map(
-    (socket) => socket.id,
+    socket => socket.id,
   );
   wsServer.in(roomID).emit(ROOM_USER_CHANGE, socketIDs);
 };
@@ -180,8 +178,8 @@ export const disconnectingEventHandler = async (
   logger?.verbose?.(`User '${socket.data.userInfo.id}' has disconnected`);
   for (const roomID of socket.rooms) {
     const otherClientIds = (await fetchSocketsSafe(wsServer, roomID, logger))
-      .filter((_socket) => _socket.id !== socket.id)
-      .map((socket) => socket.id);
+      .filter(_socket => _socket.id !== socket.id)
+      .map(socket => socket.id);
 
     if (otherClientIds.length > 0) {
       socket.broadcast.to(roomID).emit(ROOM_USER_CHANGE, otherClientIds);

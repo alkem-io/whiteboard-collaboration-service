@@ -1,20 +1,20 @@
-import { Inject, Injectable, LoggerService } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
-import { throttle } from 'lodash';
 import { Client as ElasticClient } from '@elastic/elasticsearch';
 import { ErrorCause } from '@elastic/elasticsearch/lib/api/types';
-import {
-  DetectedChanges,
-  DetectedChangesType,
-} from '../../util/detect-changes/detect.changes';
-import { ExcalidrawElement } from '../../excalidraw/types';
-import { ELASTICSEARCH_CLIENT_PROVIDER } from '../../elasticsearch-client';
+import { Inject, Injectable, LoggerService } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { throttle } from 'lodash';
+import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import {
   ConfigType,
   WhiteboardEventLoggingMode,
   WhiteboardEventLoggingModeType,
 } from '../../config';
+import { ELASTICSEARCH_CLIENT_PROVIDER } from '../../elasticsearch-client';
+import { ExcalidrawElement } from '../../excalidraw/types';
+import {
+  DetectedChanges,
+  DetectedChangesType,
+} from '../../util/detect-changes/detect.changes';
 
 type ErroredDocument = {
   status: number | undefined;
@@ -107,7 +107,7 @@ export class ElasticsearchService {
       return;
     }
 
-    const operations = data.flatMap((doc) => [
+    const operations = data.flatMap(doc => [
       { create: { _index: index } },
       doc,
     ]);
