@@ -34,19 +34,19 @@ function buildYamlNodeValue(nodeValue: any, envConfig: any) {
 
     updatedNodeValue = envConfig[envVariableKey] ?? envVariableDefaultValue;
 
-    if (updatedNodeValue.toLowerCase() === 'true') {
-      return true;
-    }
-    if (updatedNodeValue.toLowerCase() === 'false') {
-      return false;
-    }
-    if (
-      typeof updatedNodeValue === 'string' &&
-      updatedNodeValue.trim() !== ''
-    ) {
-      const numericValue = Number(updatedNodeValue);
-      if (!Number.isNaN(numericValue)) {
-        return numericValue;
+    if (typeof updatedNodeValue === 'string') {
+      const normalizedValue = updatedNodeValue.toLowerCase();
+      if (normalizedValue === 'true') {
+        return true;
+      }
+      if (normalizedValue === 'false') {
+        return false;
+      }
+      if (updatedNodeValue.trim() !== '') {
+        const numericValue = Number(updatedNodeValue);
+        if (!Number.isNaN(numericValue)) {
+          return numericValue;
+        }
       }
     }
   }
