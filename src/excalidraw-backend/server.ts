@@ -216,7 +216,11 @@ export class Server {
         `User '${socket.data.userInfo.id}' established connection`,
       );
 
-      socket.on(PING, ack => ack());
+      socket.on(PING, ack => {
+        if (typeof ack === 'function') {
+          ack();
+        }
+      });
 
       this.wsServer.to(socket.id).emit(INIT_ROOM);
       // attach error handler
