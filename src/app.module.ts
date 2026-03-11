@@ -1,9 +1,9 @@
-import { WinstonModule } from 'nest-winston';
 import { MiddlewareConsumer, Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { WinstonModule } from 'nest-winston';
+import configuration from './config/configuration';
 import { WinstonConfigService } from './config/winston.config';
 import { ServerModule } from './excalidraw-backend/server.module';
-import configuration from './config/configuration';
 import { HealthModule } from './services/health/health.module';
 
 @Module({

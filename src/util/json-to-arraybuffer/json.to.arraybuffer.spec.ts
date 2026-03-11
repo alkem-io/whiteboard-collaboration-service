@@ -62,14 +62,13 @@ describe('jsonToArrayBuffer', () => {
       { json: { array: [1, 2, 3] } },
     ];
 
-    test.each(testCases)(
-      'should encode and decode JSON correctly %#',
-      ({ json }) => {
-        const arrayBuffer = jsonToArrayBuffer(json);
-        const decodedJson = arrayBufferToJson(arrayBuffer);
-        expect(decodedJson).toEqual(json);
-      },
-    );
+    test.each(testCases)('should encode and decode JSON correctly %#', ({
+      json,
+    }) => {
+      const arrayBuffer = jsonToArrayBuffer(json);
+      const decodedJson = arrayBufferToJson(arrayBuffer);
+      expect(decodedJson).toEqual(json);
+    });
   });
 });
 

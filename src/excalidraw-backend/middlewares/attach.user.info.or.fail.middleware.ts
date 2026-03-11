@@ -1,5 +1,5 @@
 import { UserInfo } from '../../services/whiteboard-integration/user.info';
-import { SocketIoSocket, ERROR_EVENTS } from '../types';
+import { ERROR_EVENTS, SocketIoSocket } from '../types';
 import { WrappedMiddlewareHandler } from './middleware.handler.type';
 
 export const attachUserInfoOrFailMiddleware: WrappedMiddlewareHandler =

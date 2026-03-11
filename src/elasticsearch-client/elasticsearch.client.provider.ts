@@ -2,8 +2,8 @@ import { Client } from '@elastic/elasticsearch';
 import { FactoryProvider } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
-import { ELASTICSEARCH_CLIENT_PROVIDER } from './elasticsearch.client.injection.token';
 import { elasticSearchClientFactory } from './elasticsearch.client.factory';
+import { ELASTICSEARCH_CLIENT_PROVIDER } from './elasticsearch.client.injection.token';
 
 export const ElasticsearchClientProvider: FactoryProvider<Client | undefined> =
   {

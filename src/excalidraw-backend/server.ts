@@ -1,19 +1,33 @@
-import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import { setInterval, setTimeout } from 'node:timers/promises';
 import { Inject, Injectable, LoggerService } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { debounce, DebouncedFunc, throttle } from 'lodash';
+import { DebouncedFunc, debounce, throttle } from 'lodash';
+import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
+import { DisconnectReason } from 'socket.io/dist/socket-types';
+import { APP_ID } from '../app.id';
+import { ConfigType } from '../config';
+import { ExcalidrawElement, ExcalidrawFileStore } from '../excalidraw/types';
+import { UtilService } from '../services/util/util.service';
+import { isSaveErrorData } from '../services/whiteboard-integration/outputs';
+import { UserInfo } from '../services/whiteboard-integration/user.info';
+import { isAbortError, jsonToArrayBuffer } from '../util';
+import { CREATE_ROOM, DELETE_ROOM } from './adapters/adapter.event.names';
+import { getExcalidrawBaseServerOrFail } from './index';
+import {
+  attachUserInfoOrFailMiddleware,
+  initUserDataMiddleware,
+} from './middlewares';
 import {
   COLLABORATOR_MODE,
-  CollaboratorModeReasons,
   CONNECTION,
+  CollaboratorModeReasons,
+  DISCONNECT,
+  DISCONNECTING,
+  DisconnectDescription,
   defaultCollaboratorInactivity,
   defaultContributionInterval,
   defaultPermissionCheckInterval,
   defaultSaveInterval,
-  DISCONNECT,
-  DisconnectDescription,
-  DISCONNECTING,
   ERROR,
   ERROR_EVENTS,
   IDLE_STATE,
@@ -21,9 +35,9 @@ import {
   InMemorySnapshot,
   JOIN_ROOM,
   PING,
-  resetCollaboratorModeDebounceWait,
   ROOM_NOT_SAVED,
   ROOM_SAVED,
+  resetCollaboratorModeDebounceWait,
   SCENE_INIT,
   SERVER_BROADCAST,
   SERVER_SIDE_ROOM_DELETED,
@@ -32,13 +46,8 @@ import {
   SocketIoServer,
   SocketIoSocket,
 } from './types';
-import { getExcalidrawBaseServerOrFail } from './index';
-import {
-  attachUserInfoOrFailMiddleware,
-  initUserDataMiddleware,
-} from './middlewares';
-import { UserInfo } from '../services/whiteboard-integration/user.info';
-import { UtilService } from '../services/util/util.service';
+import { SceneInitPayload, ServerBroadcastPayload } from './types/events';
+import { UnauthorizedReadAccess } from './types/exceptions';
 import {
   authorizeWithRoomOrFailAndJoinHandler,
   closeConnectionWithError,
@@ -51,16 +60,7 @@ import {
   serverBroadcastEventHandler,
   serverVolatileBroadcastEventHandler,
 } from './utils';
-import { CREATE_ROOM, DELETE_ROOM } from './adapters/adapter.event.names';
-import { APP_ID } from '../app.id';
-import { isAbortError, jsonToArrayBuffer } from '../util';
-import { ConfigType } from '../config';
 import { tryDecodeIncoming } from './utils/decode.incoming';
-import { SceneInitPayload, ServerBroadcastPayload } from './types/events';
-import { ExcalidrawElement, ExcalidrawFileStore } from '../excalidraw/types';
-import { isSaveErrorData } from '../services/whiteboard-integration/outputs';
-import { UnauthorizedReadAccess } from './types/exceptions';
-import { DisconnectReason } from 'socket.io/dist/socket-types';
 
 type RoomTrackers = Map<string, AbortController>;
 type SocketTrackers = Map<string, AbortController>;
@@ -106,7 +106,7 @@ export class Server {
       .then(() =>
         this.logger.verbose?.('Excalidraw server initialized and running'),
       )
-      .catch((err) => this.logger.error(err));
+      .catch(err => this.logger.error(err));
 
     const {
       contribution_window,
@@ -216,11 +216,15 @@ export class Server {
         `User '${socket.data.userInfo.id}' established connection`,
       );
 
-      socket.on(PING, (ack) => ack());
+      socket.on(PING, ack => {
+        if (typeof ack === 'function') {
+          ack();
+        }
+      });
 
       this.wsServer.to(socket.id).emit(INIT_ROOM);
       // attach error handler
-      socket.on(ERROR, (err) => {
+      socket.on(ERROR, err => {
         if (!err) {
           return;
         }
@@ -228,7 +232,7 @@ export class Server {
         this.logger.error(err);
       });
 
-      socket.on(JOIN_ROOM, async (roomID) => {
+      socket.on(JOIN_ROOM, async roomID => {
         // authorize and join
         // this logic could be provided by an entitlement (license) service
         try {
@@ -271,7 +275,7 @@ export class Server {
           this.startCollaboratorInactivityTrackerForSocket(socket);
           // user can broadcast content change events
           socket.on(SERVER_BROADCAST, (roomID: string, data: ArrayBuffer) => {
-            serverBroadcastEventHandler(roomID, data, socket, (roomId) =>
+            serverBroadcastEventHandler(roomID, data, socket, roomId =>
               this.utilService.contentModified(socket.data.userInfo.id, roomId),
             );
             this.resetCollaboratorInactivityTrackerForSocket(socket);
@@ -352,13 +356,12 @@ export class Server {
     const ac = new AbortController();
 
     (async () => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       for await (const _ of setInterval(this.contributionWindowMs, null, {
         signal: ac.signal,
       })) {
         await this.gatherContributions(roomId);
       }
-    })().catch((e) => {
+    })().catch(e => {
       if (isAbortError(e)) {
         this.logger.verbose?.(
           `Contribution tracker for room '${roomId}' was aborted with reason '${e.cause}'`,
@@ -380,7 +383,8 @@ export class Server {
     const sockets = await this.fetchSocketsSafe(roomId);
 
     const users = sockets
-      .map((socket) => {
+      // biome-ignore lint/suspicious/useIterableCallbackReturn: intentional map-then-filter pattern
+      .map(socket => {
         const lastContributed = socket.data.lastContributed;
         if (lastContributed >= windowStart && windowEnd >= lastContributed) {
           return {
@@ -456,7 +460,7 @@ export class Server {
         signal: ac.signal,
       });
       cb();
-    })().catch((e) => {
+    })().catch(e => {
       if (isAbortError(e)) {
         this.logger.verbose?.(
           `Collaborator inactivity tracker for user '${socket.data.userInfo.id}' was aborted with reason '${e.cause}'`,
@@ -540,13 +544,12 @@ export class Server {
     const ac = new AbortController();
 
     (async () => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       for await (const _ of setInterval(this.permissionCheckIntervalMs, null, {
         signal: ac.signal,
       })) {
         await this.checkAndUpdatePermissions(socket, roomId);
       }
-    })().catch((e) => {
+    })().catch(e => {
       if (isAbortError(e)) {
         this.logger.verbose?.(
           `Permission check tracker for user '${socket.data.userInfo.id}' was aborted with reason '${e.cause}'`,

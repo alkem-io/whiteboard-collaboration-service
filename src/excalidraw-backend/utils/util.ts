@@ -1,8 +1,8 @@
 import {
-  SocketIoSocket,
+  CONNECTION_CLOSED,
   ERROR,
   ERROR_EVENTS,
-  CONNECTION_CLOSED,
+  SocketIoSocket,
 } from '../types';
 
 // closes the connection for this socket

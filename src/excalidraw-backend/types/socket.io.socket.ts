@@ -4,19 +4,19 @@ import {
   EventNames,
   ReservedOrUserListener,
 } from 'socket.io/dist/typed-events';
-import { SocketData } from './socket.data';
 import {
   CLIENT_BROADCAST,
+  CONNECTION_CLOSED,
+  ERROR,
   IDLE_STATE,
-  SCENE_INIT,
   JOIN_ROOM,
+  PING,
   ROOM_USER_CHANGE,
+  SCENE_INIT,
   SERVER_BROADCAST,
   SERVER_VOLATILE_BROADCAST,
-  ERROR,
-  CONNECTION_CLOSED,
-  PING,
 } from './event.names';
+import { SocketData } from './socket.data';
 
 type ListenEvents = {
   [JOIN_ROOM]: (roomId: string) => void;

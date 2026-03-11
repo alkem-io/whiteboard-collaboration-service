@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import * as winston from 'winston';
-import { utilities as nestWinstonModuleUtilities } from 'nest-winston';
-import * as logform from 'logform';
 import { ConfigService } from '@nestjs/config';
+import * as logform from 'logform';
+import { utilities as nestWinstonModuleUtilities } from 'nest-winston';
+import * as winston from 'winston';
 import { ConfigType } from './config.type';
 
 const LOG_LABEL = 'alkemio-whiteboard-collaboration';

@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import { WhiteboardIntegrationAdapterService } from './whiteboard.integration.adapter.service';
 import {
   ContentModifiedInputData,
   ContributionInputData,
@@ -8,6 +7,7 @@ import {
   SaveInputData,
   WhoInputData,
 } from './inputs';
+import { WhiteboardIntegrationAdapterService } from './whiteboard.integration.adapter.service';
 
 @Injectable()
 export class WhiteboardIntegrationService {
