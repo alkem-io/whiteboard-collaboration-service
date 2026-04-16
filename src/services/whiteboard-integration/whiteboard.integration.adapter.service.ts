@@ -97,16 +97,26 @@ export class WhiteboardIntegrationAdapterService {
       data,
     )
       .then(id => ({ id: id || '' }))
-      .catch(() => ({
-        id: '',
-      }));
+      .catch(error => {
+        this.logger.error(
+          `who() RMQ call failed: ${error?.message ?? JSON.stringify(error)}`,
+          error?.stack,
+        );
+        return {
+          id: '',
+        };
+      });
   }
 
   public async info(data: InfoInputData) {
     return this.sendWithResponse<InfoOutputData, InfoInputData>(
       WhiteboardIntegrationMessagePattern.INFO,
       data,
-    ).catch(() => {
+    ).catch(error => {
+      this.logger.error(
+        `info() RMQ call failed: ${error?.message ?? JSON.stringify(error)}`,
+        error?.stack,
+      );
       return {
         read: false,
         update: false,
