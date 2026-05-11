@@ -418,12 +418,15 @@ export class Server {
     this.snapshots.set(roomId, reconciledSnapshot);
   }
 
-  private getUserInfo(socket: SocketIoSocket): Promise<UserInfo | undefined> {
-    return this.utilService.getUserInfo({
-      authorization: socket.handshake.headers.authorization,
-      cookie: socket.handshake.headers.cookie,
-      guestName: socket.handshake.auth.guestName,
-    });
+  private getUserInfo(socket: SocketIoSocket): UserInfo | undefined {
+    const headerActorIdRaw = socket.handshake.headers['x-alkemio-actor-id'];
+    const headerActorId = Array.isArray(headerActorIdRaw)
+      ? headerActorIdRaw[0]
+      : headerActorIdRaw;
+    if (typeof headerActorId !== 'string' || headerActorId.length === 0) {
+      return undefined;
+    }
+    return { id: headerActorId, guestName: socket.handshake.auth.guestName };
   }
 
   private deleteTrackersForRoom(roomId: string) {
