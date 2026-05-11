@@ -87,6 +87,11 @@ export class Server {
 
   private snapshots: Map<string, InMemorySnapshot> = new Map();
 
+  // Health signal. Flipped to true once `init()` resolves and the socket.io
+  // engine has been bound. Read by HealthController to distinguish
+  // "process is up but WS isn't accepting connections" from full readiness.
+  private wsReady = false;
+
   constructor(
     @Inject(WINSTON_MODULE_NEST_PROVIDER) private logger: LoggerService,
     private readonly utilService: UtilService,
@@ -103,9 +108,10 @@ export class Server {
     });
     // don't block the constructor
     this.init()
-      .then(() =>
-        this.logger.verbose?.('Excalidraw server initialized and running'),
-      )
+      .then(() => {
+        this.wsReady = true;
+        this.logger.verbose?.('Excalidraw server initialized and running');
+      })
       .catch(err => this.logger.error(err));
 
     const {
@@ -123,6 +129,32 @@ export class Server {
       (permission_check_interval ?? defaultPermissionCheckInterval) * 1000;
 
     this.saveIntervalMs = save_interval ?? defaultSaveInterval;
+  }
+
+  /**
+   * Returns true iff the socket.io WS engine has finished bootstrap and the
+   * underlying HTTP listener (the engine's `httpServer`) is accepting
+   * connections. False during cold start (between constructor and init()
+   * resolution) and during teardown.
+   */
+  public isWsReady(): boolean {
+    if (!this.wsReady) return false;
+    // socket.io v4 exposes the underlying HTTP listener as `httpServer` on
+    // the Server instance directly (not via `engine`). `listening` is the
+    // canonical node `http.Server` flag for "accepting connections."
+    const httpServer = (
+      this.wsServer as unknown as { httpServer?: { listening?: boolean } }
+    ).httpServer;
+    return httpServer?.listening === true;
+  }
+
+  /**
+   * Current count of connected sockets — useful for health observability.
+   * Returns -1 if the engine isn't initialised yet.
+   */
+  public connectedSocketCount(): number {
+    const engine = this.wsServer.engine as unknown as { clientsCount?: number };
+    return typeof engine?.clientsCount === 'number' ? engine.clientsCount : -1;
   }
 
   private async fetchSocketsSafe(roomID: string) {
