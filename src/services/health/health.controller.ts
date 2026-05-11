@@ -19,10 +19,8 @@ type HealthReport = {
 };
 
 // IETF "Health Check Response Format for HTTP APIs"-aligned shape (subset).
-// Liveness/readiness for the whiteboard collaboration service. Probed by
-// traefik's loadBalancer.healthCheck on the failover service (when wired)
-// and by k8s readiness/liveness probes. Returns 503 if any critical check
-// fails so traefik / k8s can route around the instance.
+// Liveness/readiness for the whiteboard collaboration service.
+// Returns 503 if any critical check fails
 @Controller('/health')
 export class HealthController {
   private readonly bootedAt = Date.now();
