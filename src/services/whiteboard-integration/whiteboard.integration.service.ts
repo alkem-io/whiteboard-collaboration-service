@@ -5,7 +5,6 @@ import {
   FetchInputData,
   InfoInputData,
   SaveInputData,
-  WhoInputData,
 } from './inputs';
 import { WhiteboardIntegrationAdapterService } from './whiteboard.integration.adapter.service';
 
@@ -17,10 +16,6 @@ export class WhiteboardIntegrationService {
 
   public isConnected(): Promise<boolean> {
     return this.integrationAdapter.isConnected();
-  }
-
-  public who(data: WhoInputData) {
-    return this.integrationAdapter.who(data);
   }
 
   public info(data: InfoInputData) {

@@ -6,5 +6,6 @@ import { Server } from './server';
 @Module({
   imports: [WhiteboardIntegrationModule, UtilModule],
   providers: [Server],
+  exports: [Server],
 })
 export class ServerModule {}
