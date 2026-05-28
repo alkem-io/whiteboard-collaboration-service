@@ -240,7 +240,7 @@ export class Server {
     // may get executed after the "connection" event
     // as a result the socket will establish connection and then get disconnected immediately
     this.wsServer.use(
-      attachUserInfoOrFailMiddleware(this.getUserInfo.bind(this)),
+      attachUserInfoOrFailMiddleware(this.getUserInfo.bind(this), this.logger),
     );
 
     this.wsServer.on(CONNECTION, async (socket: SocketIoSocket) => {
