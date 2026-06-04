@@ -18,6 +18,7 @@ import {
   initUserDataMiddleware,
 } from './middlewares';
 import {
+  CLIENT_BROADCAST,
   COLLABORATOR_MODE,
   CONNECTION,
   CollaboratorModeReasons,
@@ -45,8 +46,9 @@ import {
   SocketEventData,
   SocketIoServer,
   SocketIoSocket,
+  WS_SUBTYPES,
 } from './types';
-import { SceneInitPayload, ServerBroadcastPayload } from './types/events';
+import { SceneInitPayload, SceneReloadPayload, ServerBroadcastPayload } from './types/events';
 import { UnauthorizedReadAccess } from './types/exceptions';
 import {
   authorizeWithRoomOrFailAndJoinHandler,
@@ -625,6 +627,56 @@ export class Server {
     };
     this.wsServer.to(socket.id).emit(SCENE_INIT, jsonToArrayBuffer(data));
     this.logger.verbose?.(`Scene init sent to '${socket.data.userInfo.id}'`);
+  }
+
+  /**
+   * Reloads a room's snapshot from the DB and pushes the fresh scene to every
+   * connected client. Triggered by the server after a direct (external) content
+   * write — e.g. the MCP `update_whiteboard_content` tool — so an OPEN board
+   * reflects the change live instead of only after the next save/reopen.
+   *
+   * If no live snapshot exists for the room, there is nothing to push (no one is
+   * editing it) and we return early. Otherwise we drop the stale in-memory
+   * snapshot and reload it from the DB BEFORE broadcasting — this is what stops
+   * the next throttled saveRoom from clobbering the external write — then emit a
+   * CLIENT_BROADCAST carrying a SCENE_RELOAD subtype. The Redis adapter fans the
+   * broadcast across all collaboration-service instances.
+   *
+   * @param roomId The whiteboard id (roomId === whiteboard.id).
+   */
+  public async reloadRoomFromStore(roomId: string): Promise<void> {
+    if (!isRoomId(roomId)) {
+      return;
+    }
+
+    // Nothing to do if no one has this room open on any instance.
+    if (!this.snapshots.has(roomId)) {
+      const sockets = await this.fetchSocketsSafe(roomId);
+      if (sockets.length === 0) {
+        this.logger.verbose?.(
+          `reloadRoomFromStore: room '${roomId}' has no live snapshot or sockets - skipping`,
+        );
+        return;
+      }
+    }
+
+    // Drop the stale snapshot and re-fetch the DB content into a fresh one. Doing
+    // this BEFORE the broadcast is what prevents the next saveRoom from
+    // overwriting the external write with stale in-memory content.
+    this.snapshots.delete(roomId);
+    const snapshot = await this.loadSnapshot(roomId);
+
+    const data: SceneReloadPayload = {
+      type: WS_SUBTYPES.RELOAD,
+      payload: {
+        elements: snapshot.content.elements,
+        files: snapshot.content.files,
+      },
+    };
+    this.wsServer.in(roomId).emit(CLIENT_BROADCAST, jsonToArrayBuffer(data));
+    this.logger.verbose?.(
+      `reloadRoomFromStore: SCENE_RELOAD broadcast to room '${roomId}' (${snapshot.content.elements.length} elements)`,
+    );
   }
 
   // todo: move to a helper class
