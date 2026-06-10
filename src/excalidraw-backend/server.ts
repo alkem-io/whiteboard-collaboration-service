@@ -455,7 +455,7 @@ export class Server {
     const headerActorId = Array.isArray(headerActorIdRaw)
       ? headerActorIdRaw[0]
       : headerActorIdRaw;
-    if (typeof headerActorId !== 'string' || headerActorId.length === 0) {
+    if (typeof headerActorId !== 'string') {
       return undefined;
     }
     return { id: headerActorId, guestName: socket.handshake.auth.guestName };
