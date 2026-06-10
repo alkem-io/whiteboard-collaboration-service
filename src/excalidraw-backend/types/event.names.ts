@@ -28,6 +28,10 @@ export const PING = 'ping';
 // These are message subtypes that identify the type of data being broadcast
 export enum WS_SUBTYPES {
   UPDATE = 'SCENE_UPDATE',
+  // Server-initiated full-scene reload after an external (e.g. MCP) content
+  // write. Reconciled by clients exactly like SCENE_UPDATE (NOT SCENE_INIT,
+  // which is the one-time join handler that bypasses the client echo-guard).
+  RELOAD = 'SCENE_RELOAD',
   MOUSE_LOCATION = 'MOUSE_LOCATION',
   IDLE_STATUS = 'IDLE_STATUS',
   EMOJI_REACTION = 'EMOJI_REACTION',
