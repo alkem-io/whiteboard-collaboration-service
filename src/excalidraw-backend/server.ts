@@ -12,6 +12,7 @@ import { isSaveErrorData } from '../services/whiteboard-integration/outputs';
 import { UserInfo } from '../services/whiteboard-integration/user.info';
 import { isAbortError, jsonToArrayBuffer } from '../util';
 import { CREATE_ROOM, DELETE_ROOM } from './adapters/adapter.event.names';
+import { HEADER_ACTOR_ID } from './header.actor.id';
 import { getExcalidrawBaseServerOrFail } from './index';
 import {
   attachUserInfoOrFailMiddleware,
@@ -451,11 +452,11 @@ export class Server {
   }
 
   private getUserInfo(socket: SocketIoSocket): UserInfo | undefined {
-    const headerActorIdRaw = socket.handshake.headers['x-alkemio-actor-id'];
+    const headerActorIdRaw = socket.handshake.headers[HEADER_ACTOR_ID];
     const headerActorId = Array.isArray(headerActorIdRaw)
       ? headerActorIdRaw[0]
       : headerActorIdRaw;
-    if (typeof headerActorId !== 'string') {
+    if (typeof headerActorId !== 'string' || headerActorId.length === 0) {
       return undefined;
     }
     return { id: headerActorId, guestName: socket.handshake.auth.guestName };
