@@ -24,7 +24,6 @@ import {
   FetchInputData,
   InfoInputData,
   SaveInputData,
-  WhoInputData,
 } from './inputs';
 import { WhiteboardIntegrationMessagePattern } from './message.pattern.enum';
 import {
@@ -36,7 +35,6 @@ import {
   SaveOutputData,
 } from './outputs';
 import { RetryException, RMQConnectionError, TimeoutException } from './types';
-import { UserInfo } from './user.info';
 
 @Injectable()
 export class WhiteboardIntegrationAdapterService {
@@ -89,23 +87,6 @@ export class WhiteboardIntegrationAdapterService {
       'settings.application.queue_request_retries',
       { infer: true },
     );
-  }
-
-  public async who(data: WhoInputData): Promise<UserInfo> {
-    return this.sendWithResponse<string, WhoInputData>(
-      WhiteboardIntegrationMessagePattern.WHO,
-      data,
-    )
-      .then(id => ({ id: id || '' }))
-      .catch(error => {
-        this.logger.error(
-          `who() RMQ call failed: ${error?.message ?? JSON.stringify(error)}`,
-          error?.stack,
-        );
-        return {
-          id: '',
-        };
-      });
   }
 
   public async info(data: InfoInputData) {

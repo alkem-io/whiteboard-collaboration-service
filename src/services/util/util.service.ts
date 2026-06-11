@@ -17,10 +17,8 @@ import {
   FetchInputData,
   InfoInputData,
   SaveInputData,
-  WhoInputData,
 } from '../whiteboard-integration/inputs';
 import { isFetchErrorData } from '../whiteboard-integration/outputs';
-import { UserInfo } from '../whiteboard-integration/user.info';
 import { WhiteboardIntegrationService } from '../whiteboard-integration/whiteboard.integration.service';
 
 @Injectable()
@@ -39,44 +37,6 @@ export class UtilService {
         infer: true,
       },
     );
-  }
-
-  public async getUserInfo(opts: {
-    cookie?: string;
-    authorization?: string;
-    guestName?: string;
-  }): Promise<UserInfo | never> {
-    const { cookie, authorization, guestName } = opts;
-    // we want to choose the authorization with priority
-    if (authorization) {
-      const authorizationResult = await this.integrationService.who(
-        new WhoInputData({ authorization }),
-      );
-
-      if (authorizationResult.id) {
-        return authorizationResult;
-      }
-    }
-
-    // the cookie is always present and in order not to put it with lowest priority we need to check the result
-    if (cookie) {
-      const cookieResult = await this.integrationService.who(
-        new WhoInputData({ cookie }),
-      );
-      if (cookieResult.id) {
-        return cookieResult;
-      }
-    }
-
-    if (guestName) {
-      return this.integrationService.who(
-        new WhoInputData({
-          guestName,
-        }),
-      );
-    }
-
-    return { id: '', guestName: '' };
   }
 
   public getUserInfoForRoom(

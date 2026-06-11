@@ -1,3 +1,4 @@
+import type * as http from 'node:http';
 import { setInterval, setTimeout } from 'node:timers/promises';
 import { Inject, Injectable, LoggerService } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -12,6 +13,7 @@ import { isSaveErrorData } from '../services/whiteboard-integration/outputs';
 import { UserInfo } from '../services/whiteboard-integration/user.info';
 import { isAbortError, jsonToArrayBuffer } from '../util';
 import { CREATE_ROOM, DELETE_ROOM } from './adapters/adapter.event.names';
+import { HEADER_ACTOR_ID } from './header.actor.id';
 import { getExcalidrawBaseServerOrFail } from './index';
 import {
   attachUserInfoOrFailMiddleware,
@@ -73,6 +75,9 @@ type ThrottledSaveFunctionMap = Map<string, ThrottledSaveFunction>;
 @Injectable()
 export class Server {
   private readonly wsServer: SocketIoServer;
+  // Underlying HTTP listener; kept as our own reference because socket.io
+  // does not expose it as public API.
+  private readonly httpServer: http.Server;
 
   private readonly contributionTrackers: RoomTrackers = new Map();
   private readonly collaboratorInactivityTrackers: SocketTrackers = new Map();
@@ -87,6 +92,11 @@ export class Server {
 
   private snapshots: Map<string, InMemorySnapshot> = new Map();
 
+  // Health signal. Flipped to true once `init()` resolves and the socket.io
+  // engine has been bound. Read by HealthController to distinguish
+  // "process is up but WS isn't accepting connections" from full readiness.
+  private wsReady = false;
+
   constructor(
     @Inject(WINSTON_MODULE_NEST_PROVIDER) private logger: LoggerService,
     private readonly utilService: UtilService,
@@ -95,17 +105,23 @@ export class Server {
     const serverOptions = this.configService.get('settings.application', {
       infer: true,
     });
-    this.wsServer = getExcalidrawBaseServerOrFail({
+    const { wsServer, httpServer, bound } = getExcalidrawBaseServerOrFail({
       port: +serverOptions.port,
       pingTimeout: +serverOptions.ping_timeout,
       pingInterval: +serverOptions.ping_interval,
       maxHttpBufferSize: +serverOptions.max_http_buffer_size,
     });
-    // don't block the constructor
-    this.init()
-      .then(() =>
-        this.logger.verbose?.('Excalidraw server initialized and running'),
-      )
+    this.wsServer = wsServer;
+    this.httpServer = httpServer;
+    // don't block the constructor; wsReady flips only after the HTTP listener
+    // is bound AND init() completed. On bind failure (e.g. EADDRINUSE) wsReady
+    // stays false, so /health reports 503 and the orchestrator restarts us.
+    bound
+      .then(() => this.init())
+      .then(() => {
+        this.wsReady = true;
+        this.logger.verbose?.('Excalidraw server initialized and running');
+      })
       .catch(err => this.logger.error(err));
 
     const {
@@ -123,6 +139,26 @@ export class Server {
       (permission_check_interval ?? defaultPermissionCheckInterval) * 1000;
 
     this.saveIntervalMs = save_interval ?? defaultSaveInterval;
+  }
+
+  /**
+   * Returns true iff the socket.io WS engine has finished bootstrap and the
+   * underlying HTTP listener is accepting connections. False during cold
+   * start (between constructor and init() resolution) and during teardown.
+   */
+  public isWsReady(): boolean {
+    // `listening` is the canonical node `http.Server` flag for
+    // "accepting connections."
+    return this.wsReady && this.httpServer.listening;
+  }
+
+  /**
+   * Current count of connected sockets — useful for health observability.
+   * Returns -1 if the engine isn't initialised yet.
+   */
+  public connectedSocketCount(): number {
+    const engine = this.wsServer.engine as unknown as { clientsCount?: number };
+    return typeof engine?.clientsCount === 'number' ? engine.clientsCount : -1;
   }
 
   private async fetchSocketsSafe(roomID: string) {
@@ -208,7 +244,7 @@ export class Server {
     // may get executed after the "connection" event
     // as a result the socket will establish connection and then get disconnected immediately
     this.wsServer.use(
-      attachUserInfoOrFailMiddleware(this.getUserInfo.bind(this)),
+      attachUserInfoOrFailMiddleware(this.getUserInfo.bind(this), this.logger),
     );
 
     this.wsServer.on(CONNECTION, async (socket: SocketIoSocket) => {
@@ -418,12 +454,15 @@ export class Server {
     this.snapshots.set(roomId, reconciledSnapshot);
   }
 
-  private getUserInfo(socket: SocketIoSocket): Promise<UserInfo | undefined> {
-    return this.utilService.getUserInfo({
-      authorization: socket.handshake.headers.authorization,
-      cookie: socket.handshake.headers.cookie,
-      guestName: socket.handshake.auth.guestName,
-    });
+  private getUserInfo(socket: SocketIoSocket): UserInfo | undefined {
+    const headerActorIdRaw = socket.handshake.headers[HEADER_ACTOR_ID];
+    const headerActorId = Array.isArray(headerActorIdRaw)
+      ? headerActorIdRaw[0]
+      : headerActorIdRaw;
+    if (typeof headerActorId !== 'string' || headerActorId.length === 0) {
+      return undefined;
+    }
+    return { id: headerActorId, guestName: socket.handshake.auth.guestName };
   }
 
   private deleteTrackersForRoom(roomId: string) {
