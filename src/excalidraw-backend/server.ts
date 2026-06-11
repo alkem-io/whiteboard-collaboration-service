@@ -1,3 +1,4 @@
+import type * as http from 'node:http';
 import { setInterval, setTimeout } from 'node:timers/promises';
 import { Inject, Injectable, LoggerService } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -74,6 +75,9 @@ type ThrottledSaveFunctionMap = Map<string, ThrottledSaveFunction>;
 @Injectable()
 export class Server {
   private readonly wsServer: SocketIoServer;
+  // Underlying HTTP listener; kept as our own reference because socket.io
+  // does not expose it as public API.
+  private readonly httpServer: http.Server;
 
   private readonly contributionTrackers: RoomTrackers = new Map();
   private readonly collaboratorInactivityTrackers: SocketTrackers = new Map();
@@ -101,12 +105,14 @@ export class Server {
     const serverOptions = this.configService.get('settings.application', {
       infer: true,
     });
-    this.wsServer = getExcalidrawBaseServerOrFail({
+    const { wsServer, httpServer } = getExcalidrawBaseServerOrFail({
       port: +serverOptions.port,
       pingTimeout: +serverOptions.ping_timeout,
       pingInterval: +serverOptions.ping_interval,
       maxHttpBufferSize: +serverOptions.max_http_buffer_size,
     });
+    this.wsServer = wsServer;
+    this.httpServer = httpServer;
     // don't block the constructor
     this.init()
       .then(() => {
@@ -134,19 +140,13 @@ export class Server {
 
   /**
    * Returns true iff the socket.io WS engine has finished bootstrap and the
-   * underlying HTTP listener (the engine's `httpServer`) is accepting
-   * connections. False during cold start (between constructor and init()
-   * resolution) and during teardown.
+   * underlying HTTP listener is accepting connections. False during cold
+   * start (between constructor and init() resolution) and during teardown.
    */
   public isWsReady(): boolean {
-    if (!this.wsReady) return false;
-    // socket.io v4 exposes the underlying HTTP listener as `httpServer` on
-    // the Server instance directly (not via `engine`). `listening` is the
-    // canonical node `http.Server` flag for "accepting connections."
-    const httpServer = (
-      this.wsServer as unknown as { httpServer?: { listening?: boolean } }
-    ).httpServer;
-    return httpServer?.listening === true;
+    // `listening` is the canonical node `http.Server` flag for
+    // "accepting connections."
+    return this.wsReady && this.httpServer.listening;
   }
 
   /**

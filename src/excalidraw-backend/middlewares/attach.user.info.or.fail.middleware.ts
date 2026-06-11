@@ -15,7 +15,9 @@ import { WrappedMiddlewareHandler } from './middleware.handler.type';
  */
 export const attachUserInfoOrFailMiddleware: WrappedMiddlewareHandler =
   (
-    getter: (socket: SocketIoSocket) => Promise<UserInfo>,
+    getter: (
+      socket: SocketIoSocket,
+    ) => UserInfo | undefined | Promise<UserInfo | undefined>,
     logger: LoggerService,
   ) =>
   async (socket, next) => {

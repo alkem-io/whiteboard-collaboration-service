@@ -11,16 +11,17 @@ export const getExcalidrawBaseServerOrFail = (
     maxHttpBufferSize: number;
   },
   adapterFactory?: typeof Adapter | ((nsp: Namespace) => Adapter),
-): SocketIoServer => {
+): { wsServer: SocketIoServer; httpServer: http.Server } => {
   const { port, pingTimeout, pingInterval, maxHttpBufferSize } = options;
   const httpServer = http.createServer();
   httpServer.listen(port);
 
-  return new SocketIO(httpServer, {
+  const wsServer = new SocketIO(httpServer, {
     transports: ['websocket'],
     adapter: adapterFactory,
     pingTimeout, // default 20000
     pingInterval, // default 25000
     maxHttpBufferSize, // default 1e6 - 1MB
   });
+  return { wsServer, httpServer };
 };
