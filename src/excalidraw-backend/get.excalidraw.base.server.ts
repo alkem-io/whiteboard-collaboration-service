@@ -11,9 +11,19 @@ export const getExcalidrawBaseServerOrFail = (
     maxHttpBufferSize: number;
   },
   adapterFactory?: typeof Adapter | ((nsp: Namespace) => Adapter),
-): { wsServer: SocketIoServer; httpServer: http.Server } => {
+): {
+  wsServer: SocketIoServer;
+  httpServer: http.Server;
+  bound: Promise<void>;
+} => {
   const { port, pingTimeout, pingInterval, maxHttpBufferSize } = options;
   const httpServer = http.createServer();
+  // Bind outcome as a promise: without an 'error' listener a bind failure
+  // (e.g. EADDRINUSE) is an unhandled 'error' event that crashes the process.
+  const bound = new Promise<void>((resolve, reject) => {
+    httpServer.once('listening', () => resolve());
+    httpServer.once('error', reject);
+  });
   httpServer.listen(port);
 
   const wsServer = new SocketIO(httpServer, {
@@ -23,5 +33,5 @@ export const getExcalidrawBaseServerOrFail = (
     pingInterval, // default 25000
     maxHttpBufferSize, // default 1e6 - 1MB
   });
-  return { wsServer, httpServer };
+  return { wsServer, httpServer, bound };
 };

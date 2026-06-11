@@ -105,7 +105,7 @@ export class Server {
     const serverOptions = this.configService.get('settings.application', {
       infer: true,
     });
-    const { wsServer, httpServer } = getExcalidrawBaseServerOrFail({
+    const { wsServer, httpServer, bound } = getExcalidrawBaseServerOrFail({
       port: +serverOptions.port,
       pingTimeout: +serverOptions.ping_timeout,
       pingInterval: +serverOptions.ping_interval,
@@ -113,8 +113,11 @@ export class Server {
     });
     this.wsServer = wsServer;
     this.httpServer = httpServer;
-    // don't block the constructor
-    this.init()
+    // don't block the constructor; wsReady flips only after the HTTP listener
+    // is bound AND init() completed. On bind failure (e.g. EADDRINUSE) wsReady
+    // stays false, so /health reports 503 and the orchestrator restarts us.
+    bound
+      .then(() => this.init())
       .then(() => {
         this.wsReady = true;
         this.logger.verbose?.('Excalidraw server initialized and running');
