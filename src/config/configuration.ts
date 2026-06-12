@@ -27,17 +27,28 @@ export default () => {
 function buildYamlNodeValue(nodeValue: any, envConfig: any) {
   let updatedNodeValue = nodeValue;
   const key = `${nodeValue}`;
-  const regex = '\\${(.*)}:?(.*)';
-  const found = key.match(regex);
+  const found = key.match(/^\$\{([^}]+)\}(?::(.*))?$/);
   if (found) {
     const envVariableKey = found[1];
     const envVariableDefaultValue = found[2];
 
     updatedNodeValue = envConfig[envVariableKey] ?? envVariableDefaultValue;
 
-    if (updatedNodeValue.toLowerCase() === 'true') return true;
-    if (updatedNodeValue.toLowerCase() === 'false') return false;
-    if (!isNaN(updatedNodeValue)) return Number(updatedNodeValue);
+    if (typeof updatedNodeValue === 'string') {
+      const normalizedValue = updatedNodeValue.toLowerCase();
+      if (normalizedValue === 'true') {
+        return true;
+      }
+      if (normalizedValue === 'false') {
+        return false;
+      }
+      if (updatedNodeValue.trim() !== '') {
+        const numericValue = Number(updatedNodeValue);
+        if (!Number.isNaN(numericValue)) {
+          return numericValue;
+        }
+      }
+    }
   }
 
   return updatedNodeValue;

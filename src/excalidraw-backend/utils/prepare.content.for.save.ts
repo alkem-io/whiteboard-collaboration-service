@@ -1,7 +1,7 @@
-import { InMemorySnapshot } from '../types';
-import { DeepReadonly } from './deep.readonly';
 import { ExcalidrawContent, ExcalidrawFileStore } from '../../excalidraw/types';
 import { isExcalidrawImageElement } from '../../util';
+import { InMemorySnapshot } from '../types';
+import { DeepReadonly } from './deep.readonly';
 
 export const prepareContentForSave = (
   snapshot: InMemorySnapshot,
@@ -14,7 +14,7 @@ export const prepareContentForSave = (
   for (const fileId of Object.keys(fileStore)) {
     // is there an element referencing the file
     const hostElement = elements.find(
-      (el) => isExcalidrawImageElement(el) && el.fileId === fileId,
+      el => isExcalidrawImageElement(el) && el.fileId === fileId,
     );
 
     if (hostElement) {
@@ -25,7 +25,7 @@ export const prepareContentForSave = (
 
   const withOrWithoutDeletedElements = keepDeleted
     ? elements
-    : elements.filter((element) => !element.isDeleted);
+    : elements.filter(element => !element.isDeleted);
 
   return {
     ...restOfContent,

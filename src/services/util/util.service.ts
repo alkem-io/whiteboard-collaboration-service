@@ -1,27 +1,25 @@
 import { Inject, Injectable, LoggerService } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
-import { WhiteboardIntegrationService } from '../whiteboard-integration/whiteboard.integration.service';
-import { UserInfo } from '../whiteboard-integration/user.info';
+import {
+  ConfigType,
+  WhiteboardEventLoggingMode,
+  WhiteboardEventLoggingModeType,
+} from '../../config';
+import { ExcalidrawContent, ExcalidrawElement } from '../../excalidraw/types';
+import { DeepReadonly } from '../../excalidraw-backend/utils';
+import { excalidrawInitContent } from '../../util';
+import { detectChanges } from '../../util/detect-changes/detect.changes';
+import { ElasticsearchService } from '../elasticsearch/elasticsearch.service';
 import {
   ContentModifiedInputData,
   ContributionInputData,
   FetchInputData,
   InfoInputData,
   SaveInputData,
-  WhoInputData,
 } from '../whiteboard-integration/inputs';
-import { ExcalidrawContent, ExcalidrawElement } from '../../excalidraw/types';
-import { excalidrawInitContent } from '../../util';
-import { DeepReadonly } from '../../excalidraw-backend/utils';
 import { isFetchErrorData } from '../whiteboard-integration/outputs';
-import { detectChanges } from '../../util/detect-changes/detect.changes';
-import { ElasticsearchService } from '../elasticsearch/elasticsearch.service';
-import {
-  ConfigType,
-  WhiteboardEventLoggingMode,
-  WhiteboardEventLoggingModeType,
-} from '../../config';
+import { WhiteboardIntegrationService } from '../whiteboard-integration/whiteboard.integration.service';
 
 @Injectable()
 export class UtilService {
@@ -39,44 +37,6 @@ export class UtilService {
         infer: true,
       },
     );
-  }
-
-  public async getUserInfo(opts: {
-    cookie?: string;
-    authorization?: string;
-    guestName?: string;
-  }): Promise<UserInfo | never> {
-    const { cookie, authorization, guestName } = opts;
-    // we want to choose the authorization with priority
-    if (authorization) {
-      const authorizationResult = await this.integrationService.who(
-        new WhoInputData({ authorization }),
-      );
-
-      if (authorizationResult.id) {
-        return authorizationResult;
-      }
-    }
-
-    // the cookie is always present and in order not to put it with lowest priority we need to check the result
-    if (cookie) {
-      const cookieResult = await this.integrationService.who(
-        new WhoInputData({ cookie }),
-      );
-      if (cookieResult.id) {
-        return cookieResult;
-      }
-    }
-
-    if (guestName) {
-      return this.integrationService.who(
-        new WhoInputData({
-          guestName,
-        }),
-      );
-    }
-
-    return { id: '', guestName: '' };
   }
 
   public getUserInfoForRoom(

@@ -1,7 +1,7 @@
-import * as fs from 'fs';
+import { Client } from '@elastic/elasticsearch';
 import { LoggerService } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Client } from '@elastic/elasticsearch';
+import * as fs from 'fs';
 import { ConfigType } from '../config';
 
 export const elasticSearchClientFactory = async (

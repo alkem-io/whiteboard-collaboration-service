@@ -1,5 +1,12 @@
-import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import { Inject, Injectable, LoggerService } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import {
+  ClientProxy,
+  ClientProxyFactory,
+  Transport,
+} from '@nestjs/microservices';
+import { RmqOptions } from '@nestjs/microservices/interfaces/microservice-configuration.interface';
+import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import {
   catchError,
   firstValueFrom,
@@ -9,21 +16,16 @@ import {
   timeout,
   timer,
 } from 'rxjs';
-import {
-  ClientProxy,
-  ClientProxyFactory,
-  Transport,
-} from '@nestjs/microservices';
-import { UserInfo } from './user.info';
-import { WhiteboardIntegrationMessagePattern } from './message.pattern.enum';
+import { ConfigType } from '../../config';
+import { WhiteboardIntegrationEventPattern } from './event.pattern.enum';
 import {
   ContentModifiedInputData,
   ContributionInputData,
   FetchInputData,
   InfoInputData,
   SaveInputData,
-  WhoInputData,
 } from './inputs';
+import { WhiteboardIntegrationMessagePattern } from './message.pattern.enum';
 import {
   FetchErrorData,
   FetchOutputData,
@@ -32,10 +34,6 @@ import {
   SaveErrorData,
   SaveOutputData,
 } from './outputs';
-import { WhiteboardIntegrationEventPattern } from './event.pattern.enum';
-import { ConfigService } from '@nestjs/config';
-import { ConfigType } from '../../config';
-import { RmqOptions } from '@nestjs/microservices/interfaces/microservice-configuration.interface';
 import { RetryException, RMQConnectionError, TimeoutException } from './types';
 
 @Injectable()
@@ -91,22 +89,15 @@ export class WhiteboardIntegrationAdapterService {
     );
   }
 
-  public async who(data: WhoInputData): Promise<UserInfo> {
-    return this.sendWithResponse<string, WhoInputData>(
-      WhiteboardIntegrationMessagePattern.WHO,
-      data,
-    )
-      .then((id) => ({ id: id || '' }))
-      .catch(() => ({
-        id: '',
-      }));
-  }
-
   public async info(data: InfoInputData) {
     return this.sendWithResponse<InfoOutputData, InfoInputData>(
       WhiteboardIntegrationMessagePattern.INFO,
       data,
-    ).catch(() => {
+    ).catch(error => {
+      this.logger.error(
+        `info() RMQ call failed: ${error?.message ?? JSON.stringify(error)}`,
+        error?.stack,
+      );
       return {
         read: false,
         update: false,
@@ -172,7 +163,7 @@ export class WhiteboardIntegrationAdapterService {
       'healthy?',
       { timeoutMs: 3000 },
     )
-      .then((resp) => resp.healthy)
+      .then(resp => resp.healthy)
       .catch(() => false);
   }
 
@@ -315,7 +306,7 @@ export class WhiteboardIntegrationAdapterService {
           }
         },
       ),
-      map((x) => {
+      map(x => {
         this.logger.debug?.({
           method: `sendWithResponse response took ${x.interval}ms`,
           pattern,
@@ -338,7 +329,8 @@ export class WhiteboardIntegrationAdapterService {
   private sendWithoutResponse = <TInput>(
     pattern: WhiteboardIntegrationEventPattern,
     data: TInput,
-  ): void | never => {
+  ): // biome-ignore lint/suspicious/noConfusingVoidType: void | never accurately describes throw-or-return semantics
+  void | never => {
     if (!this.client) {
       throw new Error(`Connection was not established. Send failed.`);
     }

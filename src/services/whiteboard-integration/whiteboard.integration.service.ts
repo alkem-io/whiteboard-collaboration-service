@@ -1,13 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import { WhiteboardIntegrationAdapterService } from './whiteboard.integration.adapter.service';
 import {
   ContentModifiedInputData,
   ContributionInputData,
   FetchInputData,
   InfoInputData,
   SaveInputData,
-  WhoInputData,
 } from './inputs';
+import { WhiteboardIntegrationAdapterService } from './whiteboard.integration.adapter.service';
 
 @Injectable()
 export class WhiteboardIntegrationService {
@@ -17,10 +16,6 @@ export class WhiteboardIntegrationService {
 
   public isConnected(): Promise<boolean> {
     return this.integrationAdapter.isConnected();
-  }
-
-  public who(data: WhoInputData) {
-    return this.integrationAdapter.who(data);
   }
 
   public info(data: InfoInputData) {

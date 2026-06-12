@@ -1,10 +1,11 @@
 import { Module } from '@nestjs/common';
-import { WhiteboardIntegrationModule } from '../services/whiteboard-integration/whiteboard.integration.module';
 import { UtilModule } from '../services/util/util.module';
+import { WhiteboardIntegrationModule } from '../services/whiteboard-integration/whiteboard.integration.module';
 import { Server } from './server';
 
 @Module({
   imports: [WhiteboardIntegrationModule, UtilModule],
   providers: [Server],
+  exports: [Server],
 })
 export class ServerModule {}

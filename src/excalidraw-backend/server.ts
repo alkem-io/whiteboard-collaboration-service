@@ -1,19 +1,35 @@
-import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
+import type * as http from 'node:http';
 import { setInterval, setTimeout } from 'node:timers/promises';
 import { Inject, Injectable, LoggerService } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { debounce, DebouncedFunc, throttle } from 'lodash';
+import { DebouncedFunc, debounce, throttle } from 'lodash';
+import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
+import { DisconnectReason } from 'socket.io/dist/socket-types';
+import { APP_ID } from '../app.id';
+import { ConfigType } from '../config';
+import { ExcalidrawElement, ExcalidrawFileStore } from '../excalidraw/types';
+import { UtilService } from '../services/util/util.service';
+import { isSaveErrorData } from '../services/whiteboard-integration/outputs';
+import { UserInfo } from '../services/whiteboard-integration/user.info';
+import { isAbortError, jsonToArrayBuffer } from '../util';
+import { CREATE_ROOM, DELETE_ROOM } from './adapters/adapter.event.names';
+import { HEADER_ACTOR_ID } from './header.actor.id';
+import { getExcalidrawBaseServerOrFail } from './index';
+import {
+  attachUserInfoOrFailMiddleware,
+  initUserDataMiddleware,
+} from './middlewares';
 import {
   COLLABORATOR_MODE,
-  CollaboratorModeReasons,
   CONNECTION,
+  CollaboratorModeReasons,
+  DISCONNECT,
+  DISCONNECTING,
+  DisconnectDescription,
   defaultCollaboratorInactivity,
   defaultContributionInterval,
   defaultPermissionCheckInterval,
   defaultSaveInterval,
-  DISCONNECT,
-  DisconnectDescription,
-  DISCONNECTING,
   ERROR,
   ERROR_EVENTS,
   IDLE_STATE,
@@ -21,9 +37,9 @@ import {
   InMemorySnapshot,
   JOIN_ROOM,
   PING,
-  resetCollaboratorModeDebounceWait,
   ROOM_NOT_SAVED,
   ROOM_SAVED,
+  resetCollaboratorModeDebounceWait,
   SCENE_INIT,
   SERVER_BROADCAST,
   SERVER_SIDE_ROOM_DELETED,
@@ -32,13 +48,8 @@ import {
   SocketIoServer,
   SocketIoSocket,
 } from './types';
-import { getExcalidrawBaseServerOrFail } from './index';
-import {
-  attachUserInfoOrFailMiddleware,
-  initUserDataMiddleware,
-} from './middlewares';
-import { UserInfo } from '../services/whiteboard-integration/user.info';
-import { UtilService } from '../services/util/util.service';
+import { SceneInitPayload, ServerBroadcastPayload } from './types/events';
+import { UnauthorizedReadAccess } from './types/exceptions';
 import {
   authorizeWithRoomOrFailAndJoinHandler,
   closeConnectionWithError,
@@ -51,16 +62,7 @@ import {
   serverBroadcastEventHandler,
   serverVolatileBroadcastEventHandler,
 } from './utils';
-import { CREATE_ROOM, DELETE_ROOM } from './adapters/adapter.event.names';
-import { APP_ID } from '../app.id';
-import { isAbortError, jsonToArrayBuffer } from '../util';
-import { ConfigType } from '../config';
 import { tryDecodeIncoming } from './utils/decode.incoming';
-import { SceneInitPayload, ServerBroadcastPayload } from './types/events';
-import { ExcalidrawElement, ExcalidrawFileStore } from '../excalidraw/types';
-import { isSaveErrorData } from '../services/whiteboard-integration/outputs';
-import { UnauthorizedReadAccess } from './types/exceptions';
-import { DisconnectReason } from 'socket.io/dist/socket-types';
 
 type RoomTrackers = Map<string, AbortController>;
 type SocketTrackers = Map<string, AbortController>;
@@ -73,6 +75,9 @@ type ThrottledSaveFunctionMap = Map<string, ThrottledSaveFunction>;
 @Injectable()
 export class Server {
   private readonly wsServer: SocketIoServer;
+  // Underlying HTTP listener; kept as our own reference because socket.io
+  // does not expose it as public API.
+  private readonly httpServer: http.Server;
 
   private readonly contributionTrackers: RoomTrackers = new Map();
   private readonly collaboratorInactivityTrackers: SocketTrackers = new Map();
@@ -87,6 +92,11 @@ export class Server {
 
   private snapshots: Map<string, InMemorySnapshot> = new Map();
 
+  // Health signal. Flipped to true once `init()` resolves and the socket.io
+  // engine has been bound. Read by HealthController to distinguish
+  // "process is up but WS isn't accepting connections" from full readiness.
+  private wsReady = false;
+
   constructor(
     @Inject(WINSTON_MODULE_NEST_PROVIDER) private logger: LoggerService,
     private readonly utilService: UtilService,
@@ -95,18 +105,24 @@ export class Server {
     const serverOptions = this.configService.get('settings.application', {
       infer: true,
     });
-    this.wsServer = getExcalidrawBaseServerOrFail({
+    const { wsServer, httpServer, bound } = getExcalidrawBaseServerOrFail({
       port: +serverOptions.port,
       pingTimeout: +serverOptions.ping_timeout,
       pingInterval: +serverOptions.ping_interval,
       maxHttpBufferSize: +serverOptions.max_http_buffer_size,
     });
-    // don't block the constructor
-    this.init()
-      .then(() =>
-        this.logger.verbose?.('Excalidraw server initialized and running'),
-      )
-      .catch((err) => this.logger.error(err));
+    this.wsServer = wsServer;
+    this.httpServer = httpServer;
+    // don't block the constructor; wsReady flips only after the HTTP listener
+    // is bound AND init() completed. On bind failure (e.g. EADDRINUSE) wsReady
+    // stays false, so /health reports 503 and the orchestrator restarts us.
+    bound
+      .then(() => this.init())
+      .then(() => {
+        this.wsReady = true;
+        this.logger.verbose?.('Excalidraw server initialized and running');
+      })
+      .catch(err => this.logger.error(err));
 
     const {
       contribution_window,
@@ -123,6 +139,26 @@ export class Server {
       (permission_check_interval ?? defaultPermissionCheckInterval) * 1000;
 
     this.saveIntervalMs = save_interval ?? defaultSaveInterval;
+  }
+
+  /**
+   * Returns true iff the socket.io WS engine has finished bootstrap and the
+   * underlying HTTP listener is accepting connections. False during cold
+   * start (between constructor and init() resolution) and during teardown.
+   */
+  public isWsReady(): boolean {
+    // `listening` is the canonical node `http.Server` flag for
+    // "accepting connections."
+    return this.wsReady && this.httpServer.listening;
+  }
+
+  /**
+   * Current count of connected sockets — useful for health observability.
+   * Returns -1 if the engine isn't initialised yet.
+   */
+  public connectedSocketCount(): number {
+    const engine = this.wsServer.engine as unknown as { clientsCount?: number };
+    return typeof engine?.clientsCount === 'number' ? engine.clientsCount : -1;
   }
 
   private async fetchSocketsSafe(roomID: string) {
@@ -208,7 +244,7 @@ export class Server {
     // may get executed after the "connection" event
     // as a result the socket will establish connection and then get disconnected immediately
     this.wsServer.use(
-      attachUserInfoOrFailMiddleware(this.getUserInfo.bind(this)),
+      attachUserInfoOrFailMiddleware(this.getUserInfo.bind(this), this.logger),
     );
 
     this.wsServer.on(CONNECTION, async (socket: SocketIoSocket) => {
@@ -216,11 +252,15 @@ export class Server {
         `User '${socket.data.userInfo.id}' established connection`,
       );
 
-      socket.on(PING, (ack) => ack());
+      socket.on(PING, ack => {
+        if (typeof ack === 'function') {
+          ack();
+        }
+      });
 
       this.wsServer.to(socket.id).emit(INIT_ROOM);
       // attach error handler
-      socket.on(ERROR, (err) => {
+      socket.on(ERROR, err => {
         if (!err) {
           return;
         }
@@ -228,7 +268,7 @@ export class Server {
         this.logger.error(err);
       });
 
-      socket.on(JOIN_ROOM, async (roomID) => {
+      socket.on(JOIN_ROOM, async roomID => {
         // authorize and join
         // this logic could be provided by an entitlement (license) service
         try {
@@ -271,7 +311,7 @@ export class Server {
           this.startCollaboratorInactivityTrackerForSocket(socket);
           // user can broadcast content change events
           socket.on(SERVER_BROADCAST, (roomID: string, data: ArrayBuffer) => {
-            serverBroadcastEventHandler(roomID, data, socket, (roomId) =>
+            serverBroadcastEventHandler(roomID, data, socket, roomId =>
               this.utilService.contentModified(socket.data.userInfo.id, roomId),
             );
             this.resetCollaboratorInactivityTrackerForSocket(socket);
@@ -352,13 +392,12 @@ export class Server {
     const ac = new AbortController();
 
     (async () => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       for await (const _ of setInterval(this.contributionWindowMs, null, {
         signal: ac.signal,
       })) {
         await this.gatherContributions(roomId);
       }
-    })().catch((e) => {
+    })().catch(e => {
       if (isAbortError(e)) {
         this.logger.verbose?.(
           `Contribution tracker for room '${roomId}' was aborted with reason '${e.cause}'`,
@@ -380,7 +419,8 @@ export class Server {
     const sockets = await this.fetchSocketsSafe(roomId);
 
     const users = sockets
-      .map((socket) => {
+      // biome-ignore lint/suspicious/useIterableCallbackReturn: intentional map-then-filter pattern
+      .map(socket => {
         const lastContributed = socket.data.lastContributed;
         if (lastContributed >= windowStart && windowEnd >= lastContributed) {
           return {
@@ -414,12 +454,15 @@ export class Server {
     this.snapshots.set(roomId, reconciledSnapshot);
   }
 
-  private getUserInfo(socket: SocketIoSocket): Promise<UserInfo | undefined> {
-    return this.utilService.getUserInfo({
-      authorization: socket.handshake.headers.authorization,
-      cookie: socket.handshake.headers.cookie,
-      guestName: socket.handshake.auth.guestName,
-    });
+  private getUserInfo(socket: SocketIoSocket): UserInfo | undefined {
+    const headerActorIdRaw = socket.handshake.headers[HEADER_ACTOR_ID];
+    const headerActorId = Array.isArray(headerActorIdRaw)
+      ? headerActorIdRaw[0]
+      : headerActorIdRaw;
+    if (typeof headerActorId !== 'string' || headerActorId.length === 0) {
+      return undefined;
+    }
+    return { id: headerActorId, guestName: socket.handshake.auth.guestName };
   }
 
   private deleteTrackersForRoom(roomId: string) {
@@ -456,7 +499,7 @@ export class Server {
         signal: ac.signal,
       });
       cb();
-    })().catch((e) => {
+    })().catch(e => {
       if (isAbortError(e)) {
         this.logger.verbose?.(
           `Collaborator inactivity tracker for user '${socket.data.userInfo.id}' was aborted with reason '${e.cause}'`,
@@ -540,13 +583,12 @@ export class Server {
     const ac = new AbortController();
 
     (async () => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       for await (const _ of setInterval(this.permissionCheckIntervalMs, null, {
         signal: ac.signal,
       })) {
         await this.checkAndUpdatePermissions(socket, roomId);
       }
-    })().catch((e) => {
+    })().catch(e => {
       if (isAbortError(e)) {
         this.logger.verbose?.(
           `Permission check tracker for user '${socket.data.userInfo.id}' was aborted with reason '${e.cause}'`,

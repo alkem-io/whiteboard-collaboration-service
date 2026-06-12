@@ -1,7 +1,7 @@
 import { ExcalidrawContent } from '../../excalidraw/types/excalidraw.content';
-import { DeepReadonly } from '../utils';
 import { ExcalidrawElement } from '../../excalidraw/types/excalidraw.element';
 import { ExcalidrawFileStore } from '../../excalidraw/types/excalidraw.file';
+import { DeepReadonly } from '../utils';
 import { reconcileElements } from '../utils/reconcile';
 import { reconcileFiles } from '../utils/reconcile.files';
 /**

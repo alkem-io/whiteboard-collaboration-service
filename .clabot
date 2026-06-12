@@ -1,0 +1,9 @@
+{
+  "skipUsers": [
+    "alkemio-renovate-bot[bot]",
+    "Copilot",
+    "claude[bot]",
+    "openai-codex[bot]",
+    "google-labs-jules[bot]"
+  ]
+}

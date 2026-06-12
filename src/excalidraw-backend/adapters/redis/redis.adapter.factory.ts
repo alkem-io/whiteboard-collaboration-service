@@ -1,5 +1,5 @@
-import { createClient } from 'redis';
 import { createAdapter } from '@socket.io/redis-adapter';
+import { createClient } from 'redis';
 import { APP_ID } from '../../../app.id';
 
 export const redisAdapterFactory = (() => {
@@ -8,12 +8,10 @@ export const redisAdapterFactory = (() => {
 
   const pubClient = createClient({ url: `redis://${redisHost}:${redisPort}` });
   const subClient = pubClient.duplicate();
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  pubClient.on('error', (error: Error) => {
+  pubClient.on('error', (_error: Error) => {
     // todo logging
   });
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  subClient.on('error', (error: Error) => {
+  subClient.on('error', (_error: Error) => {
     // todo logging
   });
   return createAdapter(pubClient, subClient, {

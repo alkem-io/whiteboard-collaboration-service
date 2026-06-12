@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: 'Checkout GitHub Action'
-        uses: actions/checkout@v4.1.7
+        uses: actions/checkout@v4.3.1
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3.7.0
@@ -25,7 +25,7 @@ jobs:
           password: ${{ secrets.REGISTRY_PASSWORD }}
 
       - name: 'Build & Push image'
-        uses: docker/build-push-action@v6.18.0
+        uses: docker/build-push-action@v6.19.2
         with:
           context: .
           file: ./Dockerfile
@@ -40,10 +40,10 @@ jobs:
     needs: build
     steps:
       - name: 'Checkout GitHub Action'
-        uses: actions/checkout@v4.1.7
+        uses: actions/checkout@v4.3.1
 
       - name: Install Kubectl
-        uses: azure/setup-kubectl@v4.0.0
+        uses: azure/setup-kubectl@v4.0.1
         with:
           version: 'v1.27.6' # Ensure this matches the version used in your cluster
 
@@ -61,7 +61,7 @@ jobs:
             --docker-password=${{ secrets.REGISTRY_PASSWORD }} \
             --dry-run=client -o yaml | kubectl apply -f -
 
-      - uses: Azure/k8s-deploy@v5.0.0
+      - uses: Azure/k8s-deploy@v5.1.0
         with:
           manifests: |
             manifests/25-whiteboard-collaboration-service-deployment-dev.yaml
