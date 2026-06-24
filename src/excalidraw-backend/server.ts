@@ -50,9 +50,10 @@ import {
   SocketIoSocket,
   WS_SUBTYPES,
 } from './types';
-import { SceneInitPayload, SceneReloadPayload, ServerBroadcastPayload } from './types/events';
+import { SceneInitPayload, ServerBroadcastPayload } from './types/events';
 import { UnauthorizedReadAccess } from './types/exceptions';
 import {
+  arrayToMap,
   authorizeWithRoomOrFailAndJoinHandler,
   closeConnectionWithError,
   DeepReadonly,
@@ -63,6 +64,7 @@ import {
   prepareContentForSave,
   serverBroadcastEventHandler,
   serverVolatileBroadcastEventHandler,
+  stampElementsToWin,
 } from './utils';
 import { tryDecodeIncoming } from './utils/decode.incoming';
 
@@ -669,21 +671,39 @@ export class Server {
   }
 
   /**
-   * Reloads a room's snapshot from the DB and pushes the fresh scene to every
-   * connected client. Triggered by the server after a direct (external) content
-   * write — e.g. the MCP `update_whiteboard_content` tool — so an OPEN board
-   * reflects the change live instead of only after the next save/reopen.
+   * Applies an EXTERNAL content write (e.g. the MCP `update_whiteboard_content`
+   * tool) to an OPEN room by routing it through the SAME reconcile + broadcast
+   * pipeline a human collaborator's update takes — NOT by reloading or replacing
+   * the scene. This is what makes it safe: live in-memory edits survive via
+   * per-element reconciliation instead of being discarded, and the result can no
+   * longer be clobbered by (or clobber) the next client update.
    *
-   * If no live snapshot exists for the room, there is nothing to push (no one is
-   * editing it) and we return early. Otherwise we drop the stale in-memory
-   * snapshot and reload it from the DB BEFORE broadcasting — this is what stops
-   * the next throttled saveRoom from clobbering the external write — then emit a
-   * CLIENT_BROADCAST carrying a SCENE_RELOAD subtype. The Redis adapter fans the
-   * broadcast across all collaboration-service instances.
+   * Two modes:
+   *  - DELTA (preferred): the event carries the elements the writer changed/added
+   *    (plus delete tombstones). We re-stamp ONLY those to win reconciliation and
+   *    merge them into the live snapshot — every untouched live element is left
+   *    as-is. This is the correct collaborator contract; the emitting server
+   *    should send the delta.
+   *  - FALLBACK (no delta): we reconcile the full DB scene as a remote update with
+   *    its versions AS-IS. This can never clobber a higher-versioned live edit
+   *    (data-safe), but only applies changes the DB already out-versions, so it
+   *    relies on the writer having bumped element versions. Logged as a warning.
+   *
+   * In both modes we MERGE into (never delete) the live snapshot and broadcast a
+   * normal SCENE_UPDATE, which the existing client reconciles like any peer
+   * update; the next throttled save then persists the merged result. The Redis
+   * adapter fans the broadcast across all collaboration-service instances.
    *
    * @param roomId The whiteboard id (roomId === whiteboard.id).
+   * @param delta  Optional changed elements + files the external writer applied.
    */
-  public async reloadRoomFromStore(roomId: string): Promise<void> {
+  public async applyExternalContentUpdate(
+    roomId: string,
+    delta?: {
+      elements?: readonly ExcalidrawElement[];
+      files?: DeepReadonly<ExcalidrawFileStore>;
+    },
+  ): Promise<void> {
     if (!isRoomId(roomId)) {
       return;
     }
@@ -693,28 +713,58 @@ export class Server {
       const sockets = await this.fetchSocketsSafe(roomId);
       if (sockets.length === 0) {
         this.logger.verbose?.(
-          `reloadRoomFromStore: room '${roomId}' has no live snapshot or sockets - skipping`,
+          `applyExternalContentUpdate: room '${roomId}' not open anywhere - skipping`,
         );
         return;
       }
     }
 
-    // Drop the stale snapshot and re-fetch the DB content into a fresh one. Doing
-    // this BEFORE the broadcast is what prevents the next saveRoom from
-    // overwriting the external write with stale in-memory content.
-    this.snapshots.delete(roomId);
-    const snapshot = await this.loadSnapshot(roomId);
+    // Merge base: the live snapshot (loaded from the DB only if it was evicted —
+    // a NON-destructive load, never the old delete-and-reset).
+    const base = await this.loadSnapshot(roomId);
+    const baseById = arrayToMap(
+      base.content.elements as readonly ExcalidrawElement[],
+    );
 
-    const data: SceneReloadPayload = {
-      type: WS_SUBTYPES.RELOAD,
+    let remoteElements: readonly ExcalidrawElement[];
+    let remoteFiles: DeepReadonly<ExcalidrawFileStore>;
+
+    if (delta?.elements?.length) {
+      // DELTA mode: re-stamp the changed elements to win; leave the rest untouched.
+      remoteElements = stampElementsToWin(delta.elements, baseById);
+      remoteFiles = delta.files ?? base.content.files;
+    } else {
+      // FALLBACK mode: safe full-scene reconcile from the DB (versions as-is).
+      this.logger.warn?.(
+        `applyExternalContentUpdate: room '${roomId}' received no element delta - ` +
+          `falling back to a safe full-DB reconcile (applies only changes the DB out-versions)`,
+      );
+      const dbContent = await this.utilService.fetchContentFromDbOrEmpty(roomId);
+      remoteElements = dbContent.elements;
+      remoteFiles = dbContent.files;
+    }
+
+    // MERGE into the live snapshot (per-element reconcile) — never delete/replace.
+    const merged = InMemorySnapshot.reconcile(base, remoteElements, remoteFiles);
+    this.snapshots.set(roomId, merged);
+
+    // Broadcast as a normal SCENE_UPDATE so every connected client reconciles it
+    // exactly like a peer update.
+    const data: SocketEventData<ServerBroadcastPayload> = {
+      type: WS_SUBTYPES.UPDATE,
       payload: {
-        elements: snapshot.content.elements,
-        files: snapshot.content.files,
+        elements: remoteElements,
+        files: remoteFiles,
       },
     };
     this.wsServer.in(roomId).emit(CLIENT_BROADCAST, jsonToArrayBuffer(data));
+
+    // Persist on the normal throttled path — no clobber: the snapshot already
+    // holds the reconciled external write.
+    this.queueSave(roomId);
+
     this.logger.verbose?.(
-      `reloadRoomFromStore: SCENE_RELOAD broadcast to room '${roomId}' (${snapshot.content.elements.length} elements)`,
+      `applyExternalContentUpdate: merged ${remoteElements.length} external element(s) into room '${roomId}' and broadcast SCENE_UPDATE`,
     );
   }
 

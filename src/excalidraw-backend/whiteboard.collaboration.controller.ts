@@ -1,18 +1,30 @@
 import { Controller, Inject, LoggerService } from '@nestjs/common';
 import { EventPattern, Payload, Transport } from '@nestjs/microservices';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
+import { ExcalidrawElement } from '../excalidraw/types/excalidraw.element';
+import { ExcalidrawFileStore } from '../excalidraw/types/excalidraw.file';
 import { WhiteboardIntegrationEventPattern } from '../services/whiteboard-integration/event.pattern.enum';
 import { Server } from './server';
 
 type ContentUpdatedExternallyData = {
   whiteboardId: string;
+  /**
+   * Optional element delta the external writer applied: the elements it
+   * changed/added plus delete tombstones, ideally already version-bumped. When
+   * present, the collaboration server merges it as a normal collaborator update;
+   * when absent it falls back to a safe full-DB reconcile.
+   * See {@link Server.applyExternalContentUpdate}.
+   */
+  elements?: readonly ExcalidrawElement[];
+  files?: ExcalidrawFileStore;
 };
 
 /**
  * Inbound RMQ listener (server -> this service). Consumes the
  * `contentUpdatedExternally` event the server emits after a direct content write
- * (e.g. the MCP `update_whiteboard_content` tool) and asks the Excalidraw server
- * to reload the affected room from the DB and push the new scene to live editors.
+ * (e.g. the MCP `update_whiteboard_content` tool) and merges it into the affected
+ * OPEN room through the normal collaborator reconcile + broadcast path, so live
+ * editors see the change without losing their in-flight edits.
  *
  * This is the FIRST inbound microservice listener in this service; everything
  * else here is an outbound ClientProxy (request/response towards the server).
@@ -40,14 +52,17 @@ export class WhiteboardCollaborationController {
     }
 
     this.logger.verbose?.(
-      `Received contentUpdatedExternally for whiteboard '${whiteboardId}' - reloading room from store`,
+      `Received contentUpdatedExternally for whiteboard '${whiteboardId}' - merging external content into live room`,
     );
 
     try {
-      await this.server.reloadRoomFromStore(whiteboardId);
+      await this.server.applyExternalContentUpdate(whiteboardId, {
+        elements: data.elements,
+        files: data.files,
+      });
     } catch (e: any) {
       this.logger.error?.(
-        `Failed to reload room '${whiteboardId}' from store: ${e?.message}`,
+        `Failed to apply external content update to room '${whiteboardId}': ${e?.message}`,
         e?.stack,
       );
     }
