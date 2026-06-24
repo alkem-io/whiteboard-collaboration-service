@@ -33,7 +33,8 @@ type ContentUpdatedExternallyData = {
 export class WhiteboardCollaborationController {
   constructor(
     private readonly server: Server,
-    @Inject(WINSTON_MODULE_NEST_PROVIDER) private readonly logger: LoggerService,
+    @Inject(WINSTON_MODULE_NEST_PROVIDER)
+    private readonly logger: LoggerService,
   ) {}
 
   @EventPattern(

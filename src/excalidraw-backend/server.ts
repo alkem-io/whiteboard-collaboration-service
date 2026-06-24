@@ -739,13 +739,18 @@ export class Server {
         `applyExternalContentUpdate: room '${roomId}' received no element delta - ` +
           `falling back to a safe full-DB reconcile (applies only changes the DB out-versions)`,
       );
-      const dbContent = await this.utilService.fetchContentFromDbOrEmpty(roomId);
+      const dbContent =
+        await this.utilService.fetchContentFromDbOrEmpty(roomId);
       remoteElements = dbContent.elements;
       remoteFiles = dbContent.files;
     }
 
     // MERGE into the live snapshot (per-element reconcile) — never delete/replace.
-    const merged = InMemorySnapshot.reconcile(base, remoteElements, remoteFiles);
+    const merged = InMemorySnapshot.reconcile(
+      base,
+      remoteElements,
+      remoteFiles,
+    );
     this.snapshots.set(roomId, merged);
 
     // Broadcast as a normal SCENE_UPDATE so every connected client reconciles it

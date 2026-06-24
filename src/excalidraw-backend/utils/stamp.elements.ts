@@ -33,7 +33,7 @@ export const stampElementsToWin = (
   elements: readonly ExcalidrawElement[],
   liveById: Map<string, ExcalidrawElement>,
 ): ExcalidrawElement[] =>
-  elements.map((element) => {
+  elements.map(element => {
     const liveVersion = liveById.get(element.id)?.version ?? 0;
     return {
       ...element,

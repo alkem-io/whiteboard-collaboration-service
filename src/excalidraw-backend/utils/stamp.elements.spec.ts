@@ -22,14 +22,22 @@ const el = (
 
 describe('stampElementsToWin', () => {
   it('bumps each delta element above its live version with a fresh nonce', () => {
-    const live = arrayToMap([el('a', 5), el('b', 2)]);
+    // Pin the nonce source so the freshness assertion is deterministic (the input
+    // elements carry versionNonce: 1; a fresh nonce must replace it).
+    const randomSpy = jest.spyOn(Math, 'random').mockReturnValue(0.5);
+    try {
+      const live = arrayToMap([el('a', 5), el('b', 2)]);
 
-    const [a, b] = stampElementsToWin([el('a', 3), el('b', 2)], live);
+      const [a, b] = stampElementsToWin([el('a', 3), el('b', 2)], live);
 
-    // 'a' is live v5 but the incoming delta carried v3 — still must win → v6.
-    expect(a.version).toBe(6);
-    expect(b.version).toBe(3);
-    expect(a.versionNonce).not.toBe(1);
+      // 'a' is live v5 but the incoming delta carried v3 — still must win → v6.
+      expect(a.version).toBe(6);
+      expect(b.version).toBe(3);
+      // fresh nonce derived from the (mocked) random source, not the input's 1
+      expect(a.versionNonce).toBe(Math.floor(0.5 * 2 ** 31));
+    } finally {
+      randomSpy.mockRestore();
+    }
   });
 
   it('treats an element absent from the live base as version 0', () => {
