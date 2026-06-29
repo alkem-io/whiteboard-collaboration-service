@@ -39,7 +39,10 @@ const WHITEBOARD_COLLABORATION_QUEUE = 'alkemio-whiteboard-collaboration';
       urls: [amqpUrl],
       queue: WHITEBOARD_COLLABORATION_QUEUE,
       queueOptions: { durable: true },
-      noAck: true,
+      // Manual ack: the controller acks on success and nacks-with-requeue on a
+      // transient failure (one bounded retry via the `redelivered` flag), so an
+      // external-write event is not silently lost mid-merge or on a pod restart.
+      noAck: false,
     },
   });
 

@@ -1,5 +1,11 @@
 import { Controller, Inject, LoggerService } from '@nestjs/common';
-import { EventPattern, Payload, Transport } from '@nestjs/microservices';
+import {
+  Ctx,
+  EventPattern,
+  Payload,
+  RmqContext,
+  Transport,
+} from '@nestjs/microservices';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import { ExcalidrawElement } from '../excalidraw/types/excalidraw.element';
 import { ExcalidrawFileStore } from '../excalidraw/types/excalidraw.file';
@@ -43,12 +49,18 @@ export class WhiteboardCollaborationController {
   )
   async contentUpdatedExternally(
     @Payload() data: ContentUpdatedExternallyData,
+    @Ctx() context: RmqContext,
   ): Promise<void> {
+    const channel = context.getChannelRef();
+    const message = context.getMessage();
+
     const whiteboardId = data?.whiteboardId;
     if (!whiteboardId) {
+      // Malformed event — ack to drop it; requeuing would loop forever.
       this.logger.warn?.(
-        'Received contentUpdatedExternally event without a whiteboardId',
+        'Received contentUpdatedExternally event without a whiteboardId - dropping',
       );
+      channel.ack(message);
       return;
     }
 
@@ -61,11 +73,25 @@ export class WhiteboardCollaborationController {
         elements: data.elements,
         files: data.files,
       });
+      channel.ack(message);
     } catch (e: any) {
-      this.logger.error?.(
-        `Failed to apply external content update to room '${whiteboardId}': ${e?.message}`,
-        e?.stack,
-      );
+      // Manual ack with a single bounded retry: a transient failure (DB/save) is
+      // requeued ONCE; a second failure (already redelivered) is acked so a poison
+      // message cannot loop. The DB write is authoritative, so the worst case is
+      // the live push is dropped and the editor sees the change on the next reload.
+      const alreadyRetried = message?.fields?.redelivered === true;
+      if (alreadyRetried) {
+        this.logger.error?.(
+          `Failed to apply external content update to room '${whiteboardId}' after retry - dropping: ${e?.message}`,
+          e?.stack,
+        );
+        channel.ack(message);
+      } else {
+        this.logger.warn?.(
+          `Failed to apply external content update to room '${whiteboardId}' - requeuing for one retry: ${e?.message}`,
+        );
+        channel.nack(message, false, true);
+      }
     }
   }
 }
