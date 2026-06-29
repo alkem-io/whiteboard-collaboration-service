@@ -20,6 +20,7 @@ import {
   initUserDataMiddleware,
 } from './middlewares';
 import {
+  CLIENT_BROADCAST,
   COLLABORATOR_MODE,
   CONNECTION,
   CollaboratorModeReasons,
@@ -47,10 +48,12 @@ import {
   SocketEventData,
   SocketIoServer,
   SocketIoSocket,
+  WS_SUBTYPES,
 } from './types';
 import { SceneInitPayload, ServerBroadcastPayload } from './types/events';
 import { UnauthorizedReadAccess } from './types/exceptions';
 import {
+  arrayToMap,
   authorizeWithRoomOrFailAndJoinHandler,
   closeConnectionWithError,
   DeepReadonly,
@@ -61,6 +64,7 @@ import {
   prepareContentForSave,
   serverBroadcastEventHandler,
   serverVolatileBroadcastEventHandler,
+  stampElementsToWin,
 } from './utils';
 import { tryDecodeIncoming } from './utils/decode.incoming';
 
@@ -664,6 +668,126 @@ export class Server {
     };
     this.wsServer.to(socket.id).emit(SCENE_INIT, jsonToArrayBuffer(data));
     this.logger.verbose?.(`Scene init sent to '${socket.data.userInfo.id}'`);
+  }
+
+  /**
+   * Applies an EXTERNAL content write (e.g. the MCP `update_whiteboard_content`
+   * tool) to an OPEN room by routing it through the SAME reconcile + broadcast
+   * pipeline a human collaborator's update takes — NOT by reloading or replacing
+   * the scene. This is what makes it safe: live in-memory edits survive via
+   * per-element reconciliation instead of being discarded, and the result can no
+   * longer be clobbered by (or clobber) the next client update.
+   *
+   * Two modes:
+   *  - DELTA (preferred): the event carries the elements the writer changed/added
+   *    (plus delete tombstones). We re-stamp ONLY those to win reconciliation and
+   *    merge them into the live snapshot — every untouched live element is left
+   *    as-is. This is the correct collaborator contract; the emitting server
+   *    should send the delta.
+   *  - FALLBACK (no delta): we reconcile the full DB scene as a remote update with
+   *    its versions AS-IS. This can never clobber a higher-versioned live edit
+   *    (data-safe), but only applies changes the DB already out-versions, so it
+   *    relies on the writer having bumped element versions. Logged as a warning.
+   *
+   * In both modes we MERGE into (never delete) the live snapshot and broadcast a
+   * normal SCENE_UPDATE, which the existing client reconciles like any peer
+   * update; the next throttled save then persists the merged result. The Redis
+   * adapter fans the broadcast across all collaboration-service instances.
+   *
+   * @param roomId The whiteboard id (roomId === whiteboard.id).
+   * @param delta  Optional changed elements + files the external writer applied.
+   */
+  public async applyExternalContentUpdate(
+    roomId: string,
+    delta?: {
+      elements?: readonly ExcalidrawElement[];
+      files?: DeepReadonly<ExcalidrawFileStore>;
+    },
+    opts?: {
+      /**
+       * Whether to re-stamp the delta elements to win over the current snapshot.
+       * `true` (default) for a first delivery — the external write is authoritative
+       * at write time. Pass `false` on an at-least-once RMQ REDELIVERY so a stale
+       * duplicate is reconciled by its original versions and cannot out-stamp (and
+       * thus clobber) a newer live edit that landed after the first merge.
+       */
+      restampDelta?: boolean;
+    },
+  ): Promise<void> {
+    if (!isRoomId(roomId)) {
+      return;
+    }
+
+    const restampDelta = opts?.restampDelta ?? true;
+
+    // Nothing to do if no one has this room open on any instance.
+    if (!this.snapshots.has(roomId)) {
+      const sockets = await this.fetchSocketsSafe(roomId);
+      if (sockets.length === 0) {
+        this.logger.verbose?.(
+          `applyExternalContentUpdate: room '${roomId}' not open anywhere - skipping`,
+        );
+        return;
+      }
+    }
+
+    // Merge base: the live snapshot (loaded from the DB only if it was evicted —
+    // a NON-destructive load, never the old delete-and-reset).
+    const base = await this.loadSnapshot(roomId);
+    const baseById = arrayToMap(
+      base.content.elements as readonly ExcalidrawElement[],
+    );
+
+    let remoteElements: readonly ExcalidrawElement[];
+    let remoteFiles: DeepReadonly<ExcalidrawFileStore>;
+
+    if (delta?.elements?.length) {
+      // DELTA mode. First delivery: re-stamp the changed elements to win over the
+      // current snapshot; leave the rest untouched. Redelivery (restampDelta=false):
+      // apply with the delta's original versions so the per-element reconcile keeps
+      // whichever side is newer — a stale duplicate can never clobber a fresher edit.
+      remoteElements = restampDelta
+        ? stampElementsToWin(delta.elements, baseById)
+        : delta.elements;
+      remoteFiles = delta.files ?? base.content.files;
+    } else {
+      // FALLBACK mode: safe full-scene reconcile from the DB (versions as-is).
+      this.logger.warn?.(
+        `applyExternalContentUpdate: room '${roomId}' received no element delta - ` +
+          `falling back to a safe full-DB reconcile (applies only changes the DB out-versions)`,
+      );
+      const dbContent =
+        await this.utilService.fetchContentFromDbOrEmpty(roomId);
+      remoteElements = dbContent.elements;
+      remoteFiles = dbContent.files;
+    }
+
+    // MERGE into the live snapshot (per-element reconcile) — never delete/replace.
+    const merged = InMemorySnapshot.reconcile(
+      base,
+      remoteElements,
+      remoteFiles,
+    );
+    this.snapshots.set(roomId, merged);
+
+    // Broadcast as a normal SCENE_UPDATE so every connected client reconciles it
+    // exactly like a peer update.
+    const data: SocketEventData<ServerBroadcastPayload> = {
+      type: WS_SUBTYPES.UPDATE,
+      payload: {
+        elements: remoteElements,
+        files: remoteFiles,
+      },
+    };
+    this.wsServer.in(roomId).emit(CLIENT_BROADCAST, jsonToArrayBuffer(data));
+
+    // Persist on the normal throttled path — no clobber: the snapshot already
+    // holds the reconciled external write.
+    this.queueSave(roomId);
+
+    this.logger.verbose?.(
+      `applyExternalContentUpdate: merged ${remoteElements.length} external element(s) into room '${roomId}' and broadcast SCENE_UPDATE`,
+    );
   }
 
   // todo: move to a helper class
