@@ -703,10 +703,22 @@ export class Server {
       elements?: readonly ExcalidrawElement[];
       files?: DeepReadonly<ExcalidrawFileStore>;
     },
+    opts?: {
+      /**
+       * Whether to re-stamp the delta elements to win over the current snapshot.
+       * `true` (default) for a first delivery — the external write is authoritative
+       * at write time. Pass `false` on an at-least-once RMQ REDELIVERY so a stale
+       * duplicate is reconciled by its original versions and cannot out-stamp (and
+       * thus clobber) a newer live edit that landed after the first merge.
+       */
+      restampDelta?: boolean;
+    },
   ): Promise<void> {
     if (!isRoomId(roomId)) {
       return;
     }
+
+    const restampDelta = opts?.restampDelta ?? true;
 
     // Nothing to do if no one has this room open on any instance.
     if (!this.snapshots.has(roomId)) {
@@ -730,8 +742,13 @@ export class Server {
     let remoteFiles: DeepReadonly<ExcalidrawFileStore>;
 
     if (delta?.elements?.length) {
-      // DELTA mode: re-stamp the changed elements to win; leave the rest untouched.
-      remoteElements = stampElementsToWin(delta.elements, baseById);
+      // DELTA mode. First delivery: re-stamp the changed elements to win over the
+      // current snapshot; leave the rest untouched. Redelivery (restampDelta=false):
+      // apply with the delta's original versions so the per-element reconcile keeps
+      // whichever side is newer — a stale duplicate can never clobber a fresher edit.
+      remoteElements = restampDelta
+        ? stampElementsToWin(delta.elements, baseById)
+        : delta.elements;
       remoteFiles = delta.files ?? base.content.files;
     } else {
       // FALLBACK mode: safe full-scene reconcile from the DB (versions as-is).

@@ -64,23 +64,32 @@ export class WhiteboardCollaborationController {
       return;
     }
 
+    // RMQ at-least-once: a redelivery (failed first attempt or a crash before ack)
+    // re-runs this handler with the SAME delta. Don't re-stamp it to win on the
+    // retry, so a stale duplicate is reconciled by its original versions and can't
+    // clobber a newer live edit that landed in between.
+    const redelivered = message?.fields?.redelivered === true;
+
     this.logger.verbose?.(
       `Received contentUpdatedExternally for whiteboard '${whiteboardId}' - merging external content into live room`,
     );
 
     try {
-      await this.server.applyExternalContentUpdate(whiteboardId, {
-        elements: data.elements,
-        files: data.files,
-      });
+      await this.server.applyExternalContentUpdate(
+        whiteboardId,
+        {
+          elements: data.elements,
+          files: data.files,
+        },
+        { restampDelta: !redelivered },
+      );
       channel.ack(message);
     } catch (e: any) {
       // Manual ack with a single bounded retry: a transient failure (DB/save) is
       // requeued ONCE; a second failure (already redelivered) is acked so a poison
       // message cannot loop. The DB write is authoritative, so the worst case is
       // the live push is dropped and the editor sees the change on the next reload.
-      const alreadyRetried = message?.fields?.redelivered === true;
-      if (alreadyRetried) {
+      if (redelivered) {
         this.logger.error?.(
           `Failed to apply external content update to room '${whiteboardId}' after retry - dropping: ${e?.message}`,
           e?.stack,

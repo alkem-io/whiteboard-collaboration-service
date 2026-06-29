@@ -23,19 +23,40 @@ const build = () => {
 };
 
 describe('WhiteboardCollaborationController.contentUpdatedExternally', () => {
-  it('merges then acks on success', async () => {
+  it('merges (re-stamping) then acks on a first delivery', async () => {
     const { controller, server } = build();
-    const { ctx, channel } = makeCtx();
+    const { ctx, channel } = makeCtx(false);
 
     await controller.contentUpdatedExternally(
       { whiteboardId: 'wb', elements: [] as any },
       ctx,
     );
 
-    expect(server.applyExternalContentUpdate).toHaveBeenCalledWith('wb', {
-      elements: [],
-      files: undefined,
-    });
+    // First delivery → restampDelta:true so the external write wins.
+    expect(server.applyExternalContentUpdate).toHaveBeenCalledWith(
+      'wb',
+      { elements: [], files: undefined },
+      { restampDelta: true },
+    );
+    expect(channel.ack).toHaveBeenCalledTimes(1);
+    expect(channel.nack).not.toHaveBeenCalled();
+  });
+
+  it('does NOT re-stamp on a redelivery (idempotent retry), then acks', async () => {
+    const { controller, server } = build();
+    const { ctx, channel } = makeCtx(true);
+
+    await controller.contentUpdatedExternally(
+      { whiteboardId: 'wb', elements: [] as any },
+      ctx,
+    );
+
+    // Redelivery → restampDelta:false so a stale duplicate can't clobber a newer edit.
+    expect(server.applyExternalContentUpdate).toHaveBeenCalledWith(
+      'wb',
+      { elements: [], files: undefined },
+      { restampDelta: false },
+    );
     expect(channel.ack).toHaveBeenCalledTimes(1);
     expect(channel.nack).not.toHaveBeenCalled();
   });

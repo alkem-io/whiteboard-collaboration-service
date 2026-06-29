@@ -156,6 +156,42 @@ describe('Server.applyExternalContentUpdate (orchestration)', () => {
     expect(mockWsHandles.emit).toHaveBeenCalledTimes(1);
   });
 
+  it('on a redelivery (restampDelta:false) a stale delta cannot clobber a newer live edit', async () => {
+    const server = makeServer();
+    // Live snapshot: element 'x' already advanced to v8 by a newer edit.
+    snapshotsOf(server).set(
+      ROOM,
+      new InMemorySnapshot(content([el('x', 8)]), 1),
+    );
+    jest.spyOn(server as any, 'queueSave').mockImplementation(() => undefined);
+
+    // Redelivered stale delta carries the OLD v6, applied WITHOUT re-stamping.
+    await server.applyExternalContentUpdate(
+      ROOM,
+      { elements: [el('x', 6)] },
+      { restampDelta: false },
+    );
+
+    const merged = snapshotsOf(server).get(ROOM) as InMemorySnapshot;
+    const x = merged.content.elements.find(e => e.id === 'x');
+    expect(x?.version).toBe(8); // live edit preserved; the stale duplicate lost
+  });
+
+  it('by default (first delivery) the delta is re-stamped to win', async () => {
+    const server = makeServer();
+    snapshotsOf(server).set(
+      ROOM,
+      new InMemorySnapshot(content([el('x', 8)]), 1),
+    );
+    jest.spyOn(server as any, 'queueSave').mockImplementation(() => undefined);
+
+    await server.applyExternalContentUpdate(ROOM, { elements: [el('x', 6)] });
+
+    const merged = snapshotsOf(server).get(ROOM) as InMemorySnapshot;
+    const x = merged.content.elements.find(e => e.id === 'x');
+    expect(x?.version).toBeGreaterThan(8); // stamped above the live version to win
+  });
+
   it('ignores a non-room id without touching the socket layer', async () => {
     const server = makeServer();
 
