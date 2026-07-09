@@ -4,6 +4,9 @@
 /build
 .idea/
 
+# TypeScript incremental build cache (emitted outside dist/ by --noEmit runs)
+*.tsbuildinfo
+
 # Logs
 logs
 *.log

@@ -12,8 +12,9 @@
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug=0.0.0.0:9228 --watch",
     "start:prod": "node dist/main",
-    "lint": "tsc --noEmit && biome check ./src",
-    "test": "jest"
+    "lint": "npm run typecheck:native && biome check ./src",
+    "test": "jest",
+    "typecheck:native": "tsc -p tsconfig.native.json --noEmit"
   },
   "dependencies": {
     "@elastic/elasticsearch": "8.19.2",
@@ -45,6 +46,7 @@
     "@types/lodash": "^4.17.20",
     "@types/node": "^22.18.6",
     "@types/supertest": "^6.0.0",
+    "@typescript/native": "npm:typescript@7.0.2",
     "husky": "^4.3.8",
     "jest": "^30.2.0",
     "lint-staged": "^16.3.2",
@@ -54,7 +56,7 @@
     "ts-loader": "^9.5.4",
     "ts-node": "^10.9.1",
     "tsconfig-paths": "^4.2.0",
-    "typescript": "^5.9.3"
+    "typescript": "npm:@typescript/typescript6@~6.0.2"
   },
   "jest": {
     "moduleFileExtensions": [
