@@ -22,5 +22,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: TypeScript type-check (native)
+        run: npm run typecheck:native
+
       - name: Lint
         run: npm run lint

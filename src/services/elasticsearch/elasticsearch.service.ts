@@ -1,6 +1,6 @@
-import { Client as ElasticClient } from '@elastic/elasticsearch';
-import { ErrorCause } from '@elastic/elasticsearch/lib/api/types';
-import { Inject, Injectable, LoggerService } from '@nestjs/common';
+import { Client as ElasticClient, estypes } from '@elastic/elasticsearch';
+import type { LoggerService } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { throttle } from 'lodash';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
@@ -18,7 +18,7 @@ import {
 
 type ErroredDocument = {
   status: number | undefined;
-  error: ErrorCause | undefined;
+  error: estypes.ErrorCause | undefined;
   operation: unknown;
   document: unknown;
 };
