@@ -1,7 +1,35 @@
+# ============================================================================
+# whiteboard-collaboration-service — distroless runtime image
+#
+# workspace#036-distroless-wave-1 (epic alkem-io/infrastructure-operations#2499)
+#
+# Both stages are pinned by DIGEST. Every digest below is a top-level
+# MANIFEST-LIST (OCI image index) digest, NOT a per-architecture child digest.
+# `build-release-docker-hub.yml` builds linux/amd64,linux/arm64 — a child
+# digest would pin the build to a single architecture and break the arm64 leg.
+# Re-verify with: docker buildx imagetools inspect <ref>
+#   -> MediaType must be application/vnd.oci.image.index.v1+json, and the
+#      manifest list must include linux/amd64 AND linux/arm64.
+#
+# NOTE FOR FUTURE READERS — DO NOT "HARMONISE" THIS FILE WITH
+# notifications / collaborative-document-service.
+# This repo is the one service in the wave whose Volta pin (22.23.1) has a
+# matching `node:<version>-trixie-slim` builder published, so builder and
+# runtime share the same Debian generation (trixie / Debian 13) and therefore
+# the same glibc. notifications and collaborative-document-service pin Node
+# versions for which no matched trixie builder exists and must keep a bookworm
+# builder against a trixie runtime (plan.md §2.3). That mismatch is deliberate
+# there; this match is deliberate here.
+#
+# Pins resolved 2026-08-05 (both verified as OCI indexes, amd64 + arm64):
+#   node:22.23.1-trixie-slim                     sha256:e6d9a389d34f…
+#   gcr.io/distroless/nodejs22-debian13:nonroot  sha256:939d6f167152…
+# ============================================================================
+
 # ======================
 # Builder stage (dev deps)
 # ======================
-FROM node:22.23.1-bookworm AS builder
+FROM node:22.23.1-trixie-slim@sha256:e6d9a389d34ff9678438af985c9913fbd1eb6ed36e80fea56644f4b4f6dd70ba AS builder
 
 WORKDIR /app
 
@@ -23,7 +51,7 @@ RUN npm run build
 # ======================
 # Prod deps stage (NO dev deps)
 # ======================
-FROM node:22.23.1-bookworm AS prod-deps
+FROM node:22.23.1-trixie-slim@sha256:e6d9a389d34ff9678438af985c9913fbd1eb6ed36e80fea56644f4b4f6dd70ba AS prod-deps
 
 WORKDIR /app
 
@@ -36,7 +64,7 @@ RUN npm ci --omit=dev \
 # ======================
 # Runtime stage (distroless)
 # ======================
-FROM gcr.io/distroless/nodejs22-debian12:nonroot
+FROM gcr.io/distroless/nodejs22-debian13:nonroot@sha256:939d6f1671529d230f50b563578e9b5d206af58f038b10ebd7e1233023d4e167
 
 WORKDIR /app
 
