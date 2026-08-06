@@ -37,8 +37,13 @@ jobs:
           load: true
           platforms: linux/amd64
           tags: alkemio/whiteboard-collaboration-service:ci-smoke
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # No GHA cache here. Entries written by the multiarch job below carry
+          # BOTH architectures' layers; restoring them makes `docker inspect
+          # .Size` report the multi-arch total for a single-arch image and the
+          # size gate fails against a correct build (observed in the sibling
+          # collaborative-document-service: 179 MB reported for a 60 MB image).
+          # These jobs run in parallel today, so the contamination is currently
+          # order-dependent rather than guaranteed — which is worse, not better.
 
       - name: Run distroless image smoke test
         run: bash .docker/distroless-image-smoke.sh alkemio/whiteboard-collaboration-service:ci-smoke
@@ -65,5 +70,3 @@ jobs:
           push: false
           platforms: linux/amd64,linux/arm64
           tags: alkemio/whiteboard-collaboration-service:ci-multiarch
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
