@@ -1,9 +1,4 @@
-import { RemoteSocket, Socket } from 'socket.io';
-import {
-  DefaultEventsMap,
-  EventNames,
-  ReservedOrUserListener,
-} from 'socket.io/dist/typed-events';
+import { DefaultEventsMap, RemoteSocket, Socket } from 'socket.io';
 import {
   CLIENT_BROADCAST,
   CONNECTION_CLOSED,
@@ -47,12 +42,6 @@ export type SocketIoSocket = Socket<
   EmitEvents,
   ServerSideEvents,
   SocketData
->;
-
-export type SocketHandlers = ReservedOrUserListener<
-  Record<string, never>,
-  ListenEvents,
-  EventNames<ListenEvents>
 >;
 
 export type RemoteSocketIoSocket = RemoteSocket<EmitEvents, SocketData>;

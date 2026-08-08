@@ -1,4 +1,4 @@
-import { ExtendedError } from 'socket.io/dist/namespace';
+import { ExtendedError } from 'socket.io';
 import { SocketIoSocket } from '../types';
 
 export type SimpleMiddlewareHandler = (

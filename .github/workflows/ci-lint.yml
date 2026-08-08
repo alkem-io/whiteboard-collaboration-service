@@ -8,19 +8,22 @@ on:
 
 jobs:
   lint:
-    runs-on: arc-runner-set
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6.4.0
+        uses: actions/setup-node@v7
         with:
-          node-version: '22.23.1'
+          node-version: '22.23.2'
           cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
+
+      - name: TypeScript type-check (native)
+        run: npm run typecheck:native
 
       - name: Lint
         run: npm run lint

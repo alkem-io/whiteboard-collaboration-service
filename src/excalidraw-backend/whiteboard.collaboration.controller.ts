@@ -1,4 +1,5 @@
-import { Controller, Inject, LoggerService } from '@nestjs/common';
+import type { LoggerService } from '@nestjs/common';
+import { Controller, Inject } from '@nestjs/common';
 import {
   Ctx,
   EventPattern,

@@ -1,0 +1,72 @@
+name: CI Image
+
+# workspace#036-distroless-wave-1 (epic alkem-io/infrastructure-operations#2499)
+#
+# Builds the runtime image and runs the persisted distroless contract
+# regression (.docker/distroless-image-smoke.sh) on every PR/push, so a
+# regression in the image contract — a floating FROM, a root user, a shell
+# creeping back in, dev dependencies leaking past `--omit=dev` — fails CI
+# rather than reaching a cluster.
+#
+# The multiarch job additionally proves both architectures still build:
+# build-release-docker-hub.yml publishes linux/amd64,linux/arm64, and a
+# per-architecture (child) digest pin would silently break the arm64 leg.
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches: [develop, main]
+
+jobs:
+  image-contract:
+    name: Image contract (smoke)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build runtime image (amd64, loaded locally)
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: false
+          load: true
+          platforms: linux/amd64
+          tags: alkemio/whiteboard-collaboration-service:ci-smoke
+          # No GHA cache here. Entries written by the multiarch job below carry
+          # BOTH architectures' layers; restoring them makes `docker inspect
+          # .Size` report the multi-arch total for a single-arch image and the
+          # size gate fails against a correct build (observed in the sibling
+          # collaborative-document-service: 179 MB reported for a 60 MB image).
+          # These jobs run in parallel today, so the contamination is currently
+          # order-dependent rather than guaranteed — which is worse, not better.
+
+      - name: Run distroless image smoke test
+        run: bash .docker/distroless-image-smoke.sh alkemio/whiteboard-collaboration-service:ci-smoke
+
+  multiarch-build:
+    name: Multi-arch build (amd64 + arm64)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Proves the pinned base digests are manifest-list (OCI index) digests.
+      # A per-architecture child digest fails here on the arm64 leg.
+      - name: Build for linux/amd64,linux/arm64
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: false
+          platforms: linux/amd64,linux/arm64
+          tags: alkemio/whiteboard-collaboration-service:ci-multiarch
